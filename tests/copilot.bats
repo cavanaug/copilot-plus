@@ -486,3 +486,76 @@ write_project_config() {
   [[ "$copilot_args" == *"shell"* ]]
   [[ "$copilot_args" == *"git"* ]]
 }
+
+# Helper: run wrapper from a subdirectory of the project (no .copilot/ in subdir)
+run_wrapper_in_subdir() {
+  mkdir -p "$BATS_TMPDIR/project/sub"
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" \"\$@\"" -- "$@"
+}
+
+# ============================================================
+# EXT-02a: Running from subdirectory finds parent .copilot/config.json → flags injected
+# ============================================================
+
+@test "EXT-02a: run from subdirectory finds parent .copilot/config.json → flags injected" {
+  write_project_config '{"--allow-tool":["bash"]}'
+  run_wrapper_in_subdir myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--allow-tool" "$BATS_TMPDIR/stub_args"
+  grep -qx "bash" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-02b: Parent containing .copilot/ auto-injected as --add-dir
+# ============================================================
+
+@test "EXT-02b: run from subdirectory → parent containing .copilot/ auto-injected as --add-dir" {
+  write_project_config '{"--allow-tool":["bash"]}'
+  run_wrapper_in_subdir myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "$BATS_TMPDIR/project" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-02c: Run from project root (.copilot/ at same level) → project root auto-injected as --add-dir
+# ============================================================
+
+@test "EXT-02c: run from project root (.copilot/ at same level) → project root auto-injected as --add-dir" {
+  write_project_config '{"--allow-tool":["bash"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "$BATS_TMPDIR/project" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-02d: .git/ at project root, no .copilot/ → silent passthrough, no auto --add-dir
+# ============================================================
+
+@test "EXT-02d: .git/ at project root, no .copilot/ → silent passthrough, no auto --add-dir" {
+  mkdir -p "$BATS_TMPDIR/project/.git"
+  mkdir -p "$BATS_TMPDIR/project/sub"
+  # No .copilot/ in project
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" myarg"
+  [ "$status" -eq 0 ]
+  ! grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args" 2>/dev/null || true
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-02e: .git/ and .copilot/ both at project root → config used, --add-dir injected
+# ============================================================
+
+@test "EXT-02e: .git/ and .copilot/ both at project root → config used, --add-dir injected" {
+  mkdir -p "$BATS_TMPDIR/project/.git"
+  write_project_config '{"--allow-tool":["bash"]}'
+  mkdir -p "$BATS_TMPDIR/project/sub"
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" myarg"
+  [ "$status" -eq 0 ]
+  grep -qx -- "--allow-tool" "$BATS_TMPDIR/stub_args"
+  grep -qx "bash" "$BATS_TMPDIR/stub_args"
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "$BATS_TMPDIR/project" "$BATS_TMPDIR/stub_args"
+}
