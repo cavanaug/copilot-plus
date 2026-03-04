@@ -374,30 +374,27 @@ write_project_config() {
 # EXT-01g: Same key in both configs → only project value used (key-level override)
 # ============================================================
 
-@test "EXT-01g: same key in both configs → project value used, global value suppressed" {
-  write_config '{"--allow-tool":["A"]}'
-  write_project_config '{"--allow-tool":["B"]}'
+@test "EXT-01g: same scalar key in both configs → project value used, global value suppressed" {
+  write_config '{"--model":"gpt-4"}'
+  write_project_config '{"--model":"gpt-4.1"}'
   run_wrapper_in_project myarg
   [ "$status" -eq 0 ]
-  grep -qx "B" "$BATS_TMPDIR/stub_args"
-  ! grep -qx "A" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================
 # EXT-01h: Same key overridden + another key kept → project wins for overridden, global kept for other
 # ============================================================
 
-@test "EXT-01h: project overrides --allow-tool but --model from global is still passed" {
-  write_config '{"--allow-tool":["A"],"--model":"gpt-4.1"}'
-  write_project_config '{"--allow-tool":["B"]}'
+@test "EXT-01h: project overrides --model but --yolo from global is still passed" {
+  write_config '{"--model":"gpt-4","--yolo":true}'
+  write_project_config '{"--model":"gpt-4.1"}'
   run_wrapper_in_project myarg
   [ "$status" -eq 0 ]
-  # Project's B present; global A suppressed
-  grep -qx "B" "$BATS_TMPDIR/stub_args"
-  ! grep -qx "A" "$BATS_TMPDIR/stub_args"
-  # Global --model still present (not overridden by project)
-  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
   grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
+  grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================
@@ -426,6 +423,49 @@ write_project_config() {
   grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
   grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
   grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01k: Same array key in both configs → values are additive (both included)
+# ============================================================
+
+@test "EXT-01k: same array key in both configs → both global and project values included" {
+  write_config '{"--allow-tool":["GlobalTool"]}'
+  write_project_config '{"--allow-tool":["ProjectTool"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx "GlobalTool" "$BATS_TMPDIR/stub_args"
+  grep -qx "ProjectTool" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01l: Array key additive + scalar key override in same config pair
+# ============================================================
+
+@test "EXT-01l: array key additive while scalar key override in same invocation" {
+  write_config '{"--allow-tool":["GlobalTool"],"--model":"gpt-4"}'
+  write_project_config '{"--allow-tool":["ProjectTool"],"--model":"gpt-4.1"}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  # Array: both values present
+  grep -qx "GlobalTool" "$BATS_TMPDIR/stub_args"
+  grep -qx "ProjectTool" "$BATS_TMPDIR/stub_args"
+  # Scalar: project wins
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01m: Type conflict (scalar --add-dir in global, array in project) → error, exit non-zero
+# ============================================================
+
+@test "EXT-01m: type conflict for --add-dir (scalar global, array project) → error on stderr, exit non-zero, stub not called" {
+  write_config '{"--add-dir":"/global/folder"}'
+  write_project_config '{"--add-dir":["/project/folder1","/project/folder2"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "type conflict"
+  [ ! -f "$BATS_TMPDIR/stub_args" ] || ! grep -qx "myarg" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================
@@ -561,23 +601,23 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# DRY-RUN-01: +test → prints command to stdout, does NOT exec copilot
+# DRY-RUN-01: +cmd → prints command to stdout, does NOT exec copilot
 # ============================================================
 
-@test "DRY-RUN-01: +test with no config → prints 'copilot' + user args, stub not called" {
-  run_wrapper +test myarg
+@test "DRY-RUN-01: +cmd with no config → prints 'copilot' + user args, stub not called" {
+  run_wrapper +cmd myarg
   [ "$status" -eq 0 ]
-  [[ "$output" == "copilot myarg" ]]
+  [[ "$output" == 'copilot "myarg"' ]]
   [ ! -f "$BATS_TMPDIR/stub_args" ]
 }
 
 # ============================================================
-# DRY-RUN-02: +test with config flags → flags appear in printed command
+# DRY-RUN-02: +cmd with config flags → flags appear in printed command
 # ============================================================
 
-@test "DRY-RUN-02: +test with config → prints full command with config flags + user args" {
+@test "DRY-RUN-02: +cmd with config → prints full command with config flags + user args" {
   write_config '{"--model":"gpt-4.1"}'
-  run_wrapper +test myarg
+  run_wrapper +cmd myarg
   [ "$status" -eq 0 ]
   [[ "$output" == *"copilot"* ]]
   [[ "$output" == *"--model"* ]]
@@ -587,31 +627,31 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# DRY-RUN-03: +test with no args and no config → prints just 'copilot'
+# DRY-RUN-03: +cmd with no args and no config → prints just 'copilot'
 # ============================================================
 
-@test "DRY-RUN-03: +test only, no config, no user args → prints 'copilot'" {
-  run_wrapper +test
+@test "DRY-RUN-03: +cmd only, no config, no user args → prints 'copilot'" {
+  run_wrapper +cmd
   [ "$status" -eq 0 ]
   [[ "$output" == "copilot" ]]
   [ ! -f "$BATS_TMPDIR/stub_args" ]
 }
 
 # ============================================================
-# DRY-RUN-04: +test does not appear in printed command output
+# DRY-RUN-04: +cmd does not appear in printed command output
 # ============================================================
 
-@test "DRY-RUN-04: +test itself does not appear in the printed command" {
-  run_wrapper +test myarg
+@test "DRY-RUN-04: +cmd itself does not appear in the printed command" {
+  run_wrapper +cmd myarg
   [ "$status" -eq 0 ]
-  [[ "$output" != *"+test"* ]]
+  [[ "$output" != *"+cmd"* ]]
 }
 
 # ============================================================
-# DRY-RUN-05: Without +test, existing exec behavior unchanged
+# DRY-RUN-05: Without +cmd, existing exec behavior unchanged
 # ============================================================
 
-@test "DRY-RUN-05: without +test → normal exec, stub called as before" {
+@test "DRY-RUN-05: without +cmd → normal exec, stub called as before" {
   write_config '{"--yolo":true}'
   run_wrapper myarg
   [ "$status" -eq 0 ]
@@ -620,13 +660,110 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# DRY-RUN-06: +test with special-char value → value is shell-quoted
+# DRY-RUN-06: +cmd with special-char value → value is shell-quoted
 # ============================================================
 
-@test "DRY-RUN-06: +test with special-char config value → value is shell-quoted in output" {
+@test "DRY-RUN-06: +cmd with special-char config value → value is double-quoted in output" {
   write_config '{"--thread":"shell(git:*)"}'
-  run_wrapper +test
+  run_wrapper +cmd
   [ "$status" -eq 0 ]
-  [[ "$output" == *'shell\(git:\*\)'* ]]
+  [[ "$output" == *'"shell(git:*)"'* ]]
   [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# ENV-01: +env with config → prints COPILOT_ARGS value to stdout, stub not called
+# ============================================================
+
+@test "ENV-01: +env with config → prints COPILOT_ARGS value to stdout, stub not called" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +env
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--model"* ]]
+  [[ "$output" == *"gpt-4.1"* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# ENV-02: +env with no config → prints empty string, stub not called
+# ============================================================
+
+@test "ENV-02: +env with no config → prints empty line, stub not called" {
+  run_wrapper +env
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# VERBOSE-01: +verbose with config → prints [copilot-plus] cmd: line
+# ============================================================
+
+@test "VERBOSE-01: +verbose with config → output contains cmd line with copilot + flags" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +verbose myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[copilot-plus] cmd:"* ]]
+  [[ "$output" == *"copilot"* ]]
+  [[ "$output" == *"--model"* ]]
+  [[ "$output" == *"gpt-4.1"* ]]
+  [[ "$output" == *"myarg"* ]]
+}
+
+# ============================================================
+# VERBOSE-02: +verbose does NOT exit — copilot stub is called
+# ============================================================
+
+@test "VERBOSE-02: +verbose does NOT exit — stub is called normally" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +verbose myarg
+  [ "$status" -eq 0 ]
+  [ -f "$BATS_TMPDIR/stub_args" ]
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# VERBOSE-03: +verbose output contains [copilot-plus] env: COPILOT_ARGS= line
+# ============================================================
+
+@test "VERBOSE-03: +verbose output contains [copilot-plus] env: COPILOT_ARGS= line" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +verbose myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[copilot-plus] env: COPILOT_ARGS="* ]]
+}
+
+# ============================================================
+# VERBOSE-04: +verbose does not appear in args passed to copilot
+# ============================================================
+
+@test "VERBOSE-04: +verbose stripped from args forwarded to copilot" {
+  run_wrapper +verbose myarg
+  [ "$status" -eq 0 ]
+  [ -f "$BATS_TMPDIR/stub_args" ]
+  ! grep -qx "+verbose" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# HELP-01: +help → prints help header, exit 0, stub not called
+# ============================================================
+
+@test "HELP-01: +help → prints 'copilot-plus + options:' header, exits 0, stub not called" {
+  run_wrapper +help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"copilot-plus + options:"* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# HELP-02: +help output lists all four + option names
+# ============================================================
+
+@test "HELP-02: +help output lists +cmd, +env, +verbose, +help" {
+  run_wrapper +help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"+cmd"* ]]
+  [[ "$output" == *"+env"* ]]
+  [[ "$output" == *"+verbose"* ]]
+  [[ "$output" == *"+help"* ]]
 }
