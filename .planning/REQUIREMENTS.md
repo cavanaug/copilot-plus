@@ -31,7 +31,7 @@
 ### Distribution
 
 - [x] **DIST-01**: Wrapper is a single self-contained bash script with no runtime dependencies beyond `jq` (for JSON parsing) and the `copilot` binary
-- [x] **DIST-02**: Script is named `copilot` and intended to be placed earlier in `$PATH` than the real copilot binary, shadowing it
+- [x] **DIST-02**: Script is named `copilot-cli` and intended to be invoked via shell alias `alias copilot=copilot-cli`; inside the script, `copilot` resolves to the real binary via PATH (aliases don't apply in scripts)
 
 ## v2 Requirements
 

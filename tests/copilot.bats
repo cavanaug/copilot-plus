@@ -21,7 +21,7 @@ teardown() {
 
 # Helper: run wrapper with stub copilot
 run_wrapper() {
-  run env HOME="$BATS_TMPDIR" COPILOT_REAL_BINARY="$BATS_TMPDIR/bin/copilot" bash "$BATS_TEST_DIRNAME/../copilot" "$@"
+  run env HOME="$BATS_TMPDIR" PATH="$BATS_TMPDIR/bin:$PATH" bash "$BATS_TEST_DIRNAME/../copilot-cli" "$@"
 }
 
 # Helper: write config JSON
@@ -258,10 +258,10 @@ write_config() {
 }
 
 # ============================================================
-# DIST-02: Script is named 'copilot' and shadows real copilot
+# DIST-02: Script is named 'copilot-cli', invoked via alias copilot=copilot-cli
 # ============================================================
 
-@test "DIST-02: wrapper named copilot shadows real copilot via PATH" {
+@test "DIST-02: wrapper named copilot-cli is invoked via shell alias" {
   write_config '{}'
   run_wrapper myarg
   [ "$status" -eq 0 ]
