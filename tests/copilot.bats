@@ -29,8 +29,8 @@ run_wrapper() {
 
 # Helper: run wrapper with stub copilot in project directory (for per-project config tests)
 run_wrapper_in_project() {
-  run env HOME="$BATS_TMPDIR" PWD="$BATS_TMPDIR/project" PATH="$BATS_TMPDIR/bin:$PATH" \
-    bash "$BATS_TEST_DIRNAME/../copilot-cli" "$@"
+  mkdir -p "$BATS_TMPDIR/project"
+  run bash -c "cd \"$BATS_TMPDIR/project\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" \"\$@\"" -- "$@"
 }
 
 # Helper: write global config JSON

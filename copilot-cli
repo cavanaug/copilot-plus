@@ -1,45 +1,86 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_FILE="${HOME}/.copilot/config.json"
-config_flags=()
+GLOBAL_CONFIG="${HOME}/.copilot/config.json"
+PROJECT_CONFIG="${PWD}/.copilot/config.json"
 
-if [[ -f "$CONFIG_FILE" ]] && [[ -r "$CONFIG_FILE" ]]; then
-  # Validate JSON first
-  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    echo "copilot-wrapper: error: invalid JSON in $CONFIG_FILE" >&2
+# Read all -- flags from a config file into a named array (by reference)
+# Usage: read_config_flags <config_file> <array_ref> <skip_keys_assoc_array_ref>
+# skip_keys_assoc_array_ref: associative array of keys to skip (for key-level override)
+read_config_flags() {
+  local config_file="$1"
+  local -n _flags_ref="$2"
+  local -n _skip_ref="$3"
+
+  [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 0
+
+  if ! jq empty "$config_file" 2>/dev/null; then
+    echo "copilot-wrapper: error: invalid JSON in $config_file" >&2
     exit 1
   fi
 
-  # Iterate over all top-level keys that start with "--"
   while IFS= read -r key; do
-    # Get the JSON type of this key's value
-    vtype=$(jq -r --arg k "$key" '.[$k] | type' "$CONFIG_FILE")
+    # Key-level override: skip keys that appear in the project config
+    if [[ -v _skip_ref["$key"] ]]; then
+      continue
+    fi
+
+    local vtype
+    vtype=$(jq -r --arg k "$key" '.[$k] | type' "$config_file")
 
     case "$vtype" in
       array)
         while IFS= read -r element; do
-          config_flags+=("$key" "$element")
-        done < <(jq -r --arg k "$key" '.[$k][]' "$CONFIG_FILE")
+          _flags_ref+=("$key" "$element")
+        done < <(jq -r --arg k "$key" '.[$k][]' "$config_file")
         ;;
       boolean)
-        val=$(jq -r --arg k "$key" '.[$k]' "$CONFIG_FILE")
+        local val
+        val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
         if [[ "$val" == "true" ]]; then
-          config_flags+=("$key")
+          _flags_ref+=("$key")
         fi
         # false → skip entirely
         ;;
       string|number)
-        val=$(jq -r --arg k "$key" '.[$k]' "$CONFIG_FILE")
-        config_flags+=("$key" "$val")
+        local val
+        val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
+        _flags_ref+=("$key" "$val")
         ;;
       object|null|*)
-        echo "copilot-wrapper: error: unsupported value type '$vtype' for key '$key' in $CONFIG_FILE" >&2
+        echo "copilot-wrapper: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
         exit 1
         ;;
     esac
-  done < <(jq -r 'keys[] | select(startswith("--"))' "$CONFIG_FILE")
+  done < <(jq -r 'keys[] | select(startswith("--"))' "$config_file")
+}
+
+# Collect project keys for key-level override (skip map for global processing)
+declare -A project_keys=()
+if [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
+  if ! jq empty "$PROJECT_CONFIG" 2>/dev/null; then
+    echo "copilot-wrapper: error: invalid JSON in $PROJECT_CONFIG" >&2
+    exit 1
+  fi
+  while IFS= read -r key; do
+    project_keys["$key"]=1
+  done < <(jq -r 'keys[] | select(startswith("--"))' "$PROJECT_CONFIG")
 fi
-# If config missing or unreadable: config_flags stays empty, proceed silently
+
+# Build combined flags: global (minus overridden keys) + project
+config_flags=()
+declare -A no_skip=()
+read_config_flags "$GLOBAL_CONFIG" config_flags project_keys
+read_config_flags "$PROJECT_CONFIG" config_flags no_skip
+
+# Export COPILOT_ARGS: shell-quoted, space-separated config-injected flags only (not user args)
+# This allows nested calls: copilot $COPILOT_ARGS <new-args>
+if [[ ${#config_flags[@]} -eq 0 ]]; then
+  COPILOT_ARGS=""
+else
+  COPILOT_ARGS=$(printf '%q ' "${config_flags[@]}")
+  COPILOT_ARGS="${COPILOT_ARGS% }"  # trim trailing space
+fi
+export COPILOT_ARGS
 
 exec copilot "${config_flags[@]+"${config_flags[@]}"}" "$@"
