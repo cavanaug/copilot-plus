@@ -26,7 +26,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Running `copilot <args>` when the config exists but contains invalid JSON exits immediately with a clear error message before invoking copilot
   4. User-supplied flags of the same type as config-injected flags are both applied (additive, not override); all other user-supplied args pass through unchanged
   5. The wrapper `exec`s the real copilot binary — exit code, stdin, stdout, and stderr are indistinguishable from calling copilot directly
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 01-01-PLAN.md — TDD: build and test the complete copilot wrapper script (all 16 requirements)
 
 ## Progress
 
