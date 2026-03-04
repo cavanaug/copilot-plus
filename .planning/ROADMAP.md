@@ -38,3 +38,13 @@ Phases execute in numeric order: 1
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Working Wrapper | 1/1 | Complete   | 2026-03-04 |
+
+### Phase 2: Per project config file support
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 2 to break down)

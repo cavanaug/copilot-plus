@@ -64,6 +64,10 @@ Recent decisions affecting current work:
 - Auto-discover field mappings via naming convention: Covers all current and future list fields without hardcoding
 - [Phase 01-working-wrapper]: COPILOT_REAL_BINARY env override for test stub isolation — Absolute path exec bypasses PATH-based stub; env var override allows tests to point at stub binary without changing production behavior
 
+### Roadmap Evolution
+
+- Phase 2 added: Per project config file support
+
 ### Pending Todos
 
 None yet.
