@@ -13,13 +13,13 @@
 
 ### Field Mapping
 
-- [ ] **MAP-01**: `allowed_dirs` array → one `--add-dir <value>` flag per item
-- [ ] **MAP-02**: `allowed_tools` array → one `--allow-tool <value>` flag per item
-- [ ] **MAP-03**: `denied_tools` array → one `--deny-tool <value>` flag per item
-- [ ] **MAP-04**: `allowed_urls` array → one `--allow-url <value>` flag per item
-- [ ] **MAP-05**: `denied_urls` array → one `--deny-url <value>` flag per item
-- [ ] **MAP-06**: Config keys not in the mapping table are silently ignored
-- [ ] **MAP-07**: Non-array values for mapped keys cause the wrapper to exit with a clear error message before invoking copilot
+- [ ] **MAP-01**: Any config key starting with `--` is treated as a CLI flag to inject (general-purpose, no hardcoded table)
+- [ ] **MAP-02**: Array value → one `--key value` pair per element
+- [ ] **MAP-03**: Boolean `true` value → bare flag injected with no value (e.g. `"--yolo": true` → `--yolo`)
+- [ ] **MAP-04**: Boolean `false` value → key skipped entirely
+- [ ] **MAP-05**: String or number value → single `--key value` pair (treated as single-item)
+- [ ] **MAP-06**: Object, null, or other unsupported value type → exit with clear error message to stderr before invoking copilot
+- [ ] **MAP-07**: Config keys that do NOT start with `--` are silently ignored (native copilot config fields)
 
 ### Invocation
 
