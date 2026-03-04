@@ -37,14 +37,15 @@
 
 ### Extended Config
 
-- **EXT-01**: Per-project config (e.g. `.copilot/config.json`) that merges with the global config
-- **EXT-02**: Configurable config path via `COPILOT_WRAPPER_CONFIG` env var
-- **EXT-03**: Support for scalar config fields that map to single-value CLI flags (e.g. `model` → `--model`)
+- **EXT-01**: Per-project config (`.copilot/config.json` in `$PWD`) that merges with the global config (`~/.copilot/config.json`) using additive merge with key-level override (project wins for same key)
+- **EXT-02**: Configurable config path via `COPILOT_WRAPPER_CONFIG` env var *(deferred — not Phase 2)*
+- **EXT-03**: Support for scalar config fields that map to single-value CLI flags (e.g. `model` → `--model`) *(already handled by MAP-05)*
 
 ### Ergonomics
 
 - **ERG-01**: `--wrapper-debug` flag that prints the full constructed command before exec-ing (for troubleshooting)
 - **ERG-02**: Support for `available_tools` array → `--available-tools` (space-separated variant)
+- **ERG-03**: Export `COPILOT_ARGS` environment variable containing all config-injected flags (shell-quoted, space-separated) so nested copilot invocations can use `copilot $COPILOT_ARGS` to retain the original launch context
 
 ## Out of Scope
 

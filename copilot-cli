@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REAL_COPILOT="${COPILOT_REAL_BINARY:-/home/linuxbrew/.linuxbrew/bin/copilot}"
 CONFIG_FILE="${HOME}/.copilot/config.json"
 config_flags=()
 
@@ -43,4 +42,4 @@ if [[ -f "$CONFIG_FILE" ]] && [[ -r "$CONFIG_FILE" ]]; then
 fi
 # If config missing or unreadable: config_flags stays empty, proceed silently
 
-exec "$REAL_COPILOT" "${config_flags[@]+"${config_flags[@]}"}" "$@"
+exec copilot "${config_flags[@]+"${config_flags[@]}"}" "$@"
