@@ -5,7 +5,7 @@ milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
 last_updated: "2026-03-04T01:12:21Z"
-last_activity: 2026-03-04 — Phase 2 Plan 1 complete
+last_activity: 2026-03-04 — Completed quick task 1: upward search for .copilot dir and auto add-dir
 progress:
   total_phases: 2
   completed_phases: 2
@@ -82,6 +82,12 @@ None yet.
 ### Blockers/Concerns
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | upward search for .copilot dir and auto add-dir | 2026-03-04 | 67bb594 | [1-upward-search-for-copilot-dir-and-auto-a](.planning/quick/1-upward-search-for-copilot-dir-and-auto-a/) |
 
 ## Session Continuity
 
