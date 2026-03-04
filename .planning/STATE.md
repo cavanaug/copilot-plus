@@ -5,7 +5,7 @@ milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
 last_updated: "2026-03-04T00:00:00Z"
-last_activity: 2026-03-04 — Completed quick task 3: add +test dry-run flag to copilot-plus
+last_activity: 2026-03-04 - Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
 progress:
   total_phases: 2
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 2 of 2 (Per-Project Config File Support)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-04 - Completed quick task 3: add +test option to copilot-plus that outputs the copilot command without calling it
+Last activity: 2026-03-04 - Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
 
 Progress: [██████████] 100%
 
@@ -90,9 +90,10 @@ None yet.
 | 1 | upward search for .copilot dir and auto add-dir | 2026-03-04 | 67bb594 | [1-upward-search-for-copilot-dir-and-auto-a](.planning/quick/1-upward-search-for-copilot-dir-and-auto-a/) |
 | 2 | rename wrapper script from copilot-cli to copilot-plus | 2026-03-03 | 057c952 | [2-rename-wrapper-script-to-copilot-plus](.planning/quick/2-rename-wrapper-script-to-copilot-plus/) |
 | 3 | add +test dry-run option to copilot-plus | 2026-03-04 | f7db0e0 | [3-add-test-option-to-copilot-plus-that-out](.planning/quick/3-add-test-option-to-copilot-plus-that-out/) |
+| 4 | fix +test output to use proper shell quoting so it is copy-paste executable | 2026-03-04 | d14fe91 | [4-fix-test-output-to-use-proper-shell-quot](.planning/quick/4-fix-test-output-to-use-proper-shell-quot/) |
 
 ## Session Continuity
 
 Last session: 2026-03-04T00:00:00Z
-Stopped at: Completed quick task 3: add +test dry-run flag to copilot-plus
+Stopped at: Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
 Resume file: None
