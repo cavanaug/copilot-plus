@@ -13,6 +13,7 @@ A single-phase delivery: build a self-contained bash wrapper script that reads `
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Working Wrapper** - Complete bash wrapper that reads config, maps array fields to flags, and transparently invokes copilot (completed 2026-03-04)
+- [x] **Phase 2: Per-Project Config File Support** - Per-project `.copilot/config.json` with key-level override merge and `COPILOT_ARGS` export (completed 2026-03-04)
 
 ## Phase Details
 
@@ -38,13 +39,15 @@ Phases execute in numeric order: 1
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Working Wrapper | 1/1 | Complete   | 2026-03-04 |
+| 2. Per-Project Config File Support | 1/1 | Complete | 2026-03-04 |
 
-### Phase 2: Per project config file support
+### Phase 2: Per-Project Config File Support
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal**: Users can place a `.copilot/config.json` in any project directory and have those settings merged with their global config on every `copilot` invocation from that directory — project-level keys override global keys
+**Requirements**: EXT-01, ERG-03
 **Depends on:** Phase 1
-**Plans:** 0 plans
+**Plans:** 1 plan
+**Completed:** 2026-03-04
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 2 to break down)
+- [x] 02-01-PLAN.md — TDD: per-project config merge with key-level override + COPILOT_ARGS export
