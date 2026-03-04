@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. The wrapper `exec`s the real copilot binary — exit code, stdin, stdout, and stderr are indistinguishable from calling copilot directly
 **Plans**: 1 plan
 Plans:
-- [ ] 01-01-PLAN.md — TDD: build and test the complete copilot wrapper script (all 16 requirements)
+- [ ] 01-01-PLAN.md — TDD: build and test the copilot wrapper using general-purpose -- key convention (all 16 requirements)
 
 ## Progress
 
