@@ -5,7 +5,7 @@ milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
 last_updated: "2026-03-04T00:00:00Z"
-last_activity: 2026-03-04 - Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
+last_activity: 2026-03-04 - Completed quick task 6: refactor + options: rename +test to +cmd, add +env, +verbose, +help
 progress:
   total_phases: 2
   completed_phases: 2
@@ -91,7 +91,8 @@ None yet.
 | 2 | rename wrapper script from copilot-cli to copilot-plus | 2026-03-03 | 057c952 | [2-rename-wrapper-script-to-copilot-plus](.planning/quick/2-rename-wrapper-script-to-copilot-plus/) |
 | 3 | add +test dry-run option to copilot-plus | 2026-03-04 | f7db0e0 | [3-add-test-option-to-copilot-plus-that-out](.planning/quick/3-add-test-option-to-copilot-plus-that-out/) |
 | 4 | fix +test output to use proper shell quoting so it is copy-paste executable | 2026-03-04 | d14fe91 | [4-fix-test-output-to-use-proper-shell-quot](.planning/quick/4-fix-test-output-to-use-proper-shell-quot/) |
-| 6 | refactor + options: rename +test to +cmd, add +env +verbose +help | 2026-03-04 | dd3864d | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
+| 5 | fix array key merge: additive arrays, scalar overrides, type-conflict error | 2026-03-04 | a5042ef | [5-fix-array-key-merge-global-and-project-a](.planning/quick/5-fix-array-key-merge-global-and-project-a/) |
+| 6 | refactor + options: rename +test to +cmd, add +env, +verbose, +help | 2026-03-04 | a5042ef | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
 
 ## Session Continuity
 
