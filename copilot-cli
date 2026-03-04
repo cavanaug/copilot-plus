@@ -2,7 +2,46 @@
 set -euo pipefail
 
 GLOBAL_CONFIG="${HOME}/.copilot/config.json"
-PROJECT_CONFIG="${PWD}/.copilot/config.json"
+
+# Walk upward from $PWD to find the nearest .copilot/ directory.
+# Stops at the first .copilot/ found, or at a .git/ boundary (project root), or at /.
+# Also stops at HOME boundary to prevent global ~/.copilot/ from being treated as project config.
+# Sets PROJECT_CONFIG and PROJECT_ROOT.
+find_project_config() {
+  local dir="$PWD"
+  while true; do
+    if [[ -d "$dir/.copilot" ]]; then
+      PROJECT_CONFIG="$dir/.copilot/config.json"
+      PROJECT_ROOT="$dir"
+      return
+    fi
+    if [[ -d "$dir/.git" ]]; then
+      # Reached git root without finding .copilot/ — no project config
+      PROJECT_CONFIG=""
+      PROJECT_ROOT=""
+      return
+    fi
+    local parent
+    parent="$(dirname "$dir")"
+    # Stop at HOME boundary — don't pick up global ~/.copilot as project config
+    if [[ "$parent" == "$HOME" ]] || [[ "$dir" == "$HOME" ]]; then
+      PROJECT_CONFIG=""
+      PROJECT_ROOT=""
+      return
+    fi
+    if [[ "$parent" == "$dir" ]]; then
+      # Reached filesystem root
+      PROJECT_CONFIG=""
+      PROJECT_ROOT=""
+      return
+    fi
+    dir="$parent"
+  done
+}
+
+PROJECT_CONFIG=""
+PROJECT_ROOT=""
+find_project_config
 
 # Read all -- flags from a config file into a named array (by reference)
 # Usage: read_config_flags <config_file> <array_ref> <skip_keys_assoc_array_ref>
@@ -72,6 +111,11 @@ config_flags=()
 declare -A no_skip=()
 read_config_flags "$GLOBAL_CONFIG" config_flags project_keys
 read_config_flags "$PROJECT_CONFIG" config_flags no_skip
+
+# Auto-inject project root as --add-dir if a .copilot/ was found via upward search
+if [[ -n "$PROJECT_ROOT" ]]; then
+  config_flags+=("--add-dir" "$PROJECT_ROOT")
+fi
 
 # Export COPILOT_ARGS: shell-quoted, space-separated config-injected flags only (not user args)
 # This allows nested calls: copilot $COPILOT_ARGS <new-args>
