@@ -618,3 +618,15 @@ run_wrapper_in_subdir() {
   [ -f "$BATS_TMPDIR/stub_args" ]
   grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
 }
+
+# ============================================================
+# DRY-RUN-06: +test with special-char value → value is shell-quoted
+# ============================================================
+
+@test "DRY-RUN-06: +test with special-char config value → value is shell-quoted in output" {
+  write_config '{"--thread":"shell(git:*)"}'
+  run_wrapper +test
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'shell\(git:\*\)'* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
