@@ -559,3 +559,62 @@ run_wrapper_in_subdir() {
   grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
   grep -qx "$BATS_TMPDIR/project" "$BATS_TMPDIR/stub_args"
 }
+
+# ============================================================
+# DRY-RUN-01: +test → prints command to stdout, does NOT exec copilot
+# ============================================================
+
+@test "DRY-RUN-01: +test with no config → prints 'copilot' + user args, stub not called" {
+  run_wrapper +test myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" == "copilot myarg" ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# DRY-RUN-02: +test with config flags → flags appear in printed command
+# ============================================================
+
+@test "DRY-RUN-02: +test with config → prints full command with config flags + user args" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +test myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"copilot"* ]]
+  [[ "$output" == *"--model"* ]]
+  [[ "$output" == *"gpt-4.1"* ]]
+  [[ "$output" == *"myarg"* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# DRY-RUN-03: +test with no args and no config → prints just 'copilot'
+# ============================================================
+
+@test "DRY-RUN-03: +test only, no config, no user args → prints 'copilot'" {
+  run_wrapper +test
+  [ "$status" -eq 0 ]
+  [[ "$output" == "copilot" ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# DRY-RUN-04: +test does not appear in printed command output
+# ============================================================
+
+@test "DRY-RUN-04: +test itself does not appear in the printed command" {
+  run_wrapper +test myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"+test"* ]]
+}
+
+# ============================================================
+# DRY-RUN-05: Without +test, existing exec behavior unchanged
+# ============================================================
+
+@test "DRY-RUN-05: without +test → normal exec, stub called as before" {
+  write_config '{"--yolo":true}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  [ -f "$BATS_TMPDIR/stub_args" ]
+  grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
+}
