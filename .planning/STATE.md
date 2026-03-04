@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
-last_updated: "2026-03-04T01:12:21Z"
-last_activity: 2026-03-04 — Completed quick task 1: upward search for .copilot dir and auto add-dir
+last_updated: "2026-03-03T00:00:00Z"
+last_activity: 2026-03-03 — Completed quick task 2: rename wrapper script to copilot-plus
 progress:
   total_phases: 2
   completed_phases: 2
@@ -88,9 +88,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | upward search for .copilot dir and auto add-dir | 2026-03-04 | 67bb594 | [1-upward-search-for-copilot-dir-and-auto-a](.planning/quick/1-upward-search-for-copilot-dir-and-auto-a/) |
+| 2 | rename wrapper script from copilot-cli to copilot-plus | 2026-03-03 | 057c952 | [2-rename-wrapper-script-to-copilot-plus](.planning/quick/2-rename-wrapper-script-to-copilot-plus/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T01:12:21Z
-Stopped at: Completed 02-per-project-config-file-support-01-PLAN.md
+Last session: 2026-03-03T00:00:00Z
+Stopped at: Completed quick task 2: rename wrapper script to copilot-plus
 Resume file: None
