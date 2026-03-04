@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_COPILOT="${COPILOT_REAL_BINARY:-/home/linuxbrew/.linuxbrew/bin/copilot}"
+CONFIG_FILE="${HOME}/.copilot/config.json"
+config_flags=()
+
+if [[ -f "$CONFIG_FILE" ]] && [[ -r "$CONFIG_FILE" ]]; then
+  # Validate JSON first
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "copilot-wrapper: error: invalid JSON in $CONFIG_FILE" >&2
+    exit 1
+  fi
+
+  # Iterate over all top-level keys that start with "--"
+  while IFS= read -r key; do
+    # Get the JSON type of this key's value
+    vtype=$(jq -r --arg k "$key" '.[$k] | type' "$CONFIG_FILE")
+
+    case "$vtype" in
+      array)
+        while IFS= read -r element; do
+          config_flags+=("$key" "$element")
+        done < <(jq -r --arg k "$key" '.[$k][]' "$CONFIG_FILE")
+        ;;
+      boolean)
+        val=$(jq -r --arg k "$key" '.[$k]' "$CONFIG_FILE")
+        if [[ "$val" == "true" ]]; then
+          config_flags+=("$key")
+        fi
+        # false → skip entirely
+        ;;
+      string|number)
+        val=$(jq -r --arg k "$key" '.[$k]' "$CONFIG_FILE")
+        config_flags+=("$key" "$val")
+        ;;
+      object|null|*)
+        echo "copilot-wrapper: error: unsupported value type '$vtype' for key '$key' in $CONFIG_FILE" >&2
+        exit 1
+        ;;
+    esac
+  done < <(jq -r 'keys[] | select(startswith("--"))' "$CONFIG_FILE")
+fi
+# If config missing or unreadable: config_flags stays empty, proceed silently
+
+exec "$REAL_COPILOT" "${config_flags[@]+"${config_flags[@]}"}" "$@"

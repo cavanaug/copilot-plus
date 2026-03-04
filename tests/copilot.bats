@@ -5,11 +5,9 @@
 setup() {
   # Create stub copilot binary
   mkdir -p "$BATS_TMPDIR/bin"
-  cat > "$BATS_TMPDIR/bin/copilot" << 'STUB'
-#!/usr/bin/env bash
-printf '%s\n' "$@" > "$BATS_TMPDIR/stub_args"
-exit 0
-STUB
+  STUB_ARGS_FILE="$BATS_TMPDIR/stub_args"
+  printf '#!/usr/bin/env bash\nprintf '"'"'%%s\\n'"'"' "$@" > "%s"\nexit 0\n' "$STUB_ARGS_FILE" \
+    > "$BATS_TMPDIR/bin/copilot"
   chmod +x "$BATS_TMPDIR/bin/copilot"
 
   # Create .copilot config directory
@@ -23,7 +21,7 @@ teardown() {
 
 # Helper: run wrapper with stub copilot
 run_wrapper() {
-  run env HOME="$BATS_TMPDIR" PATH="$BATS_TMPDIR/bin:$PATH" bash "$BATS_TEST_DIRNAME/../copilot" "$@"
+  run env HOME="$BATS_TMPDIR" COPILOT_REAL_BINARY="$BATS_TMPDIR/bin/copilot" bash "$BATS_TEST_DIRNAME/../copilot" "$@"
 }
 
 # Helper: write config JSON
