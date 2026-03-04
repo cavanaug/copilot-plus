@@ -1,13 +1,14 @@
 #!/usr/bin/env bats
 # Test suite for the copilot wrapper script
 # Covers all 16 requirements: CONF-01..03, MAP-01..07, INVK-01..04, DIST-01..02
+# Phase 2 additions: EXT-01 (per-project config), ERG-03 (COPILOT_ARGS export)
 
 setup() {
-  # Create stub copilot binary
+  # Create stub copilot binary (also dumps env for COPILOT_ARGS testing)
   mkdir -p "$BATS_TMPDIR/bin"
   STUB_ARGS_FILE="$BATS_TMPDIR/stub_args"
-  printf '#!/usr/bin/env bash\nprintf '"'"'%%s\\n'"'"' "$@" > "%s"\nexit 0\n' "$STUB_ARGS_FILE" \
-    > "$BATS_TMPDIR/bin/copilot"
+  printf '#!/usr/bin/env bash\nprintf '"'"'%%s\\n'"'"' "$@" > "%s"\nenv > "%s"\nexit 0\n' \
+    "$STUB_ARGS_FILE" "$BATS_TMPDIR/stub_env" > "$BATS_TMPDIR/bin/copilot"
   chmod +x "$BATS_TMPDIR/bin/copilot"
 
   # Create .copilot config directory
@@ -17,6 +18,8 @@ setup() {
 teardown() {
   rm -f "$BATS_TMPDIR/stub_args"
   rm -f "$BATS_TMPDIR/.copilot/config.json"
+  rm -rf "$BATS_TMPDIR/project"
+  rm -f "$BATS_TMPDIR/stub_env"
 }
 
 # Helper: run wrapper with stub copilot
@@ -24,9 +27,21 @@ run_wrapper() {
   run env HOME="$BATS_TMPDIR" PATH="$BATS_TMPDIR/bin:$PATH" bash "$BATS_TEST_DIRNAME/../copilot-cli" "$@"
 }
 
-# Helper: write config JSON
+# Helper: run wrapper with stub copilot in project directory (for per-project config tests)
+run_wrapper_in_project() {
+  run env HOME="$BATS_TMPDIR" PWD="$BATS_TMPDIR/project" PATH="$BATS_TMPDIR/bin:$PATH" \
+    bash "$BATS_TEST_DIRNAME/../copilot-cli" "$@"
+}
+
+# Helper: write global config JSON
 write_config() {
   printf '%s\n' "$1" > "$BATS_TMPDIR/.copilot/config.json"
+}
+
+# Helper: write project config JSON
+write_project_config() {
+  mkdir -p "$BATS_TMPDIR/project/.copilot"
+  printf '%s\n' "$1" > "$BATS_TMPDIR/project/.copilot/config.json"
 }
 
 # ============================================================
@@ -268,4 +283,206 @@ write_config() {
   # Stub was called (not the real copilot) meaning PATH ordering worked
   [ -f "$BATS_TMPDIR/stub_args" ]
   grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01a: Project config only (no global config) → flags injected from project config
+# ============================================================
+
+@test "EXT-01a: project config only → flags injected from project config" {
+  # No global config created; only project config
+  write_project_config '{"--allow-tool":["bash"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--allow-tool" "$BATS_TMPDIR/stub_args"
+  grep -qx "bash" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01b: Project config missing → silent, no project flags (global still applied)
+# ============================================================
+
+@test "EXT-01b: project config missing → silent, global flags still applied" {
+  write_config '{"--model":"gpt-4.1"}'
+  # No project config created
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01c: Project config invalid JSON → exit non-zero, error on stderr, stub not called
+# ============================================================
+
+@test "EXT-01c: project config invalid JSON → exit non-zero, error on stderr, stub not called" {
+  write_project_config 'not valid json {'
+  run_wrapper_in_project myarg
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"error"* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# EXT-01d: Project config object value → exit non-zero, error on stderr, stub not called
+# ============================================================
+
+@test "EXT-01d: project config object value → exit non-zero, error on stderr, stub not called" {
+  write_project_config '{"--bad":{}}'
+  run_wrapper_in_project myarg
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"error"* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# EXT-01e: Both configs present, different keys → both flags appear in output (additive)
+# ============================================================
+
+@test "EXT-01e: global --model + project --add-dir → both flags present (additive merge)" {
+  write_config '{"--model":"gpt-4.1"}'
+  write_project_config '{"--add-dir":["/tmp"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "/tmp" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01f: Both configs present → global flags come before project flags in arg order
+# ============================================================
+
+@test "EXT-01f: global flags appear before project flags in final argument list" {
+  write_config '{"--model":"gpt-4.1"}'
+  write_project_config '{"--add-dir":["/tmp"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  args=$(cat "$BATS_TMPDIR/stub_args")
+  model_line=$(echo "$args" | grep -n -- "--model" | head -1 | cut -d: -f1)
+  adddir_line=$(echo "$args" | grep -n -- "--add-dir" | head -1 | cut -d: -f1)
+  [ -n "$model_line" ]
+  [ -n "$adddir_line" ]
+  # Global (--model) must appear before project (--add-dir)
+  [ "$model_line" -lt "$adddir_line" ]
+}
+
+# ============================================================
+# EXT-01g: Same key in both configs → only project value used (key-level override)
+# ============================================================
+
+@test "EXT-01g: same key in both configs → project value used, global value suppressed" {
+  write_config '{"--allow-tool":["A"]}'
+  write_project_config '{"--allow-tool":["B"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx "B" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "A" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01h: Same key overridden + another key kept → project wins for overridden, global kept for other
+# ============================================================
+
+@test "EXT-01h: project overrides --allow-tool but --model from global is still passed" {
+  write_config '{"--allow-tool":["A"],"--model":"gpt-4.1"}'
+  write_project_config '{"--allow-tool":["B"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  # Project's B present; global A suppressed
+  grep -qx "B" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "A" "$BATS_TMPDIR/stub_args"
+  # Global --model still present (not overridden by project)
+  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01i: Project config empty JSON {} → no project flags, global still applied
+# ============================================================
+
+@test "EXT-01i: project config empty JSON → no project flags, global still applied" {
+  write_config '{"--model":"gpt-4.1"}'
+  write_project_config '{}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# EXT-01j: Project has boolean true key not in global → injected additively
+# ============================================================
+
+@test "EXT-01j: project boolean true key not in global → injected additively" {
+  write_config '{"--model":"gpt-4.1"}'
+  write_project_config '{"--yolo":true}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
+  grep -qx -- "--model" "$BATS_TMPDIR/stub_args"
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+}
+
+# ============================================================
+# ERG-03a: Config with flags → COPILOT_ARGS exported with shell-quoted flags
+# ============================================================
+
+@test "ERG-03a: config with flags → COPILOT_ARGS exported and contains config flags" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  # Check COPILOT_ARGS was set in the stub's environment
+  grep -q "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env"
+  copilot_args=$(grep "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env" | cut -d= -f2-)
+  [[ "$copilot_args" == *"--model"* ]]
+  [[ "$copilot_args" == *"gpt-4.1"* ]]
+}
+
+# ============================================================
+# ERG-03b: No config (or empty config) → COPILOT_ARGS exported as empty string
+# ============================================================
+
+@test "ERG-03b: no config flags → COPILOT_ARGS exported as empty string" {
+  write_config '{}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  grep -q "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env"
+  copilot_args=$(grep "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env" | cut -d= -f2-)
+  [ -z "$copilot_args" ]
+}
+
+# ============================================================
+# ERG-03c: COPILOT_ARGS contains only config-injected flags, NOT user-supplied args
+# ============================================================
+
+@test "ERG-03c: COPILOT_ARGS contains only config flags, NOT user-supplied args" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper myuserarg
+  [ "$status" -eq 0 ]
+  copilot_args=$(grep "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env" | cut -d= -f2-)
+  [[ "$copilot_args" == *"--model"* ]]
+  # User arg must NOT appear in COPILOT_ARGS
+  [[ "$copilot_args" != *"myuserarg"* ]]
+}
+
+# ============================================================
+# ERG-03d: Special shell chars in value properly quoted in COPILOT_ARGS
+# ============================================================
+
+@test "ERG-03d: special shell chars (e.g. shell(git:*)) properly quoted in COPILOT_ARGS" {
+  write_config '{"--allow-tool":["shell(git:*)"]}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  grep -q "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env"
+  copilot_args=$(grep "^COPILOT_ARGS=" "$BATS_TMPDIR/stub_env" | cut -d= -f2-)
+  # COPILOT_ARGS should contain --allow-tool and the value (possibly quoted)
+  [[ "$copilot_args" == *"--allow-tool"* ]]
+  # The value should be present in some form (shell-quoted)
+  [[ "$copilot_args" == *"shell"* ]]
+  [[ "$copilot_args" == *"git"* ]]
 }
