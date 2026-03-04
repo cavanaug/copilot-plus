@@ -127,4 +127,25 @@ else
 fi
 export COPILOT_ARGS
 
+# Check for +test dry-run flag anywhere in user args
+dry_run=0
+user_args=()
+for arg in "$@"; do
+  if [[ "$arg" == "+test" ]]; then
+    dry_run=1
+  else
+    user_args+=("$arg")
+  fi
+done
+
+if [[ "$dry_run" -eq 1 ]]; then
+  cmd=(copilot "${config_flags[@]+"${config_flags[@]}"}" "${user_args[@]+"${user_args[@]}"}")
+  printf '%s' "${cmd[0]}"
+  for part in "${cmd[@]:1}"; do
+    printf ' %s' "$part"
+  done
+  printf '\n'
+  exit 0
+fi
+
 exec copilot "${config_flags[@]+"${config_flags[@]}"}" "$@"
