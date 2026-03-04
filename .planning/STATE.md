@@ -91,9 +91,10 @@ None yet.
 | 2 | rename wrapper script from copilot-cli to copilot-plus | 2026-03-03 | 057c952 | [2-rename-wrapper-script-to-copilot-plus](.planning/quick/2-rename-wrapper-script-to-copilot-plus/) |
 | 3 | add +test dry-run option to copilot-plus | 2026-03-04 | f7db0e0 | [3-add-test-option-to-copilot-plus-that-out](.planning/quick/3-add-test-option-to-copilot-plus-that-out/) |
 | 4 | fix +test output to use proper shell quoting so it is copy-paste executable | 2026-03-04 | d14fe91 | [4-fix-test-output-to-use-proper-shell-quot](.planning/quick/4-fix-test-output-to-use-proper-shell-quot/) |
+| 6 | refactor + options: rename +test to +cmd, add +env +verbose +help | 2026-03-04 | dd3864d | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T00:00:00Z
-Stopped at: Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
+Last session: 2026-03-04T04:53:23Z
+Stopped at: Completed quick task 6: refactor + options — rename +test to +cmd, add +env +verbose +help
 Resume file: None
