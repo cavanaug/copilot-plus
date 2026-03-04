@@ -54,7 +54,7 @@ read_config_flags() {
   [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 0
 
   if ! jq empty "$config_file" 2>/dev/null; then
-    echo "copilot-wrapper: error: invalid JSON in $config_file" >&2
+    echo "copilot-plus: error: invalid JSON in $config_file" >&2
     exit 1
   fi
 
@@ -87,7 +87,7 @@ read_config_flags() {
         _flags_ref+=("$key" "$val")
         ;;
       object|null|*)
-        echo "copilot-wrapper: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
+        echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
         exit 1
         ;;
     esac
@@ -98,7 +98,7 @@ read_config_flags() {
 declare -A project_keys=()
 if [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
   if ! jq empty "$PROJECT_CONFIG" 2>/dev/null; then
-    echo "copilot-wrapper: error: invalid JSON in $PROJECT_CONFIG" >&2
+    echo "copilot-plus: error: invalid JSON in $PROJECT_CONFIG" >&2
     exit 1
   fi
   while IFS= read -r key; do
