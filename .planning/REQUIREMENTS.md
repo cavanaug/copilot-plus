@@ -1,4 +1,4 @@
-# Requirements: copilot-cli-wrapper
+# Requirements: copilot-plus-wrapper
 
 **Defined:** 2026-03-03
 **Core Value:** Any `allowed_*` / `denied_*` array in `~/.copilot/config.json` is automatically expanded into CLI flags on every copilot invocation — zero extra typing required.
@@ -31,7 +31,7 @@
 ### Distribution
 
 - [x] **DIST-01**: Wrapper is a single self-contained bash script with no runtime dependencies beyond `jq` (for JSON parsing) and the `copilot` binary
-- [x] **DIST-02**: Script is named `copilot-cli` and intended to be invoked via shell alias `alias copilot=copilot-cli`; inside the script, `copilot` resolves to the real binary via PATH (aliases don't apply in scripts)
+- [x] **DIST-02**: Script is named `copilot-plus` and intended to be invoked via shell alias `alias copilot=copilot-plus`; inside the script, `copilot` resolves to the real binary via PATH (aliases don't apply in scripts)
 
 ## v2 Requirements
 

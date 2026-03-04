@@ -24,13 +24,13 @@ teardown() {
 
 # Helper: run wrapper with stub copilot
 run_wrapper() {
-  run env HOME="$BATS_TMPDIR" PATH="$BATS_TMPDIR/bin:$PATH" bash "$BATS_TEST_DIRNAME/../copilot-cli" "$@"
+  run env HOME="$BATS_TMPDIR" PATH="$BATS_TMPDIR/bin:$PATH" bash "$BATS_TEST_DIRNAME/../copilot-plus" "$@"
 }
 
 # Helper: run wrapper with stub copilot in project directory (for per-project config tests)
 run_wrapper_in_project() {
   mkdir -p "$BATS_TMPDIR/project"
-  run bash -c "cd \"$BATS_TMPDIR/project\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" \"\$@\"" -- "$@"
+  run bash -c "cd \"$BATS_TMPDIR/project\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" \"\$@\"" -- "$@"
 }
 
 # Helper: write global config JSON
@@ -273,10 +273,10 @@ write_project_config() {
 }
 
 # ============================================================
-# DIST-02: Script is named 'copilot-cli', invoked via alias copilot=copilot-cli
+# DIST-02: Script is named 'copilot-plus', invoked via alias copilot=copilot-plus
 # ============================================================
 
-@test "DIST-02: wrapper named copilot-cli is invoked via shell alias" {
+@test "DIST-02: wrapper named copilot-plus is invoked via shell alias" {
   write_config '{}'
   run_wrapper myarg
   [ "$status" -eq 0 ]
@@ -490,7 +490,7 @@ write_project_config() {
 # Helper: run wrapper from a subdirectory of the project (no .copilot/ in subdir)
 run_wrapper_in_subdir() {
   mkdir -p "$BATS_TMPDIR/project/sub"
-  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" \"\$@\"" -- "$@"
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" \"\$@\"" -- "$@"
 }
 
 # ============================================================
@@ -538,7 +538,7 @@ run_wrapper_in_subdir() {
   mkdir -p "$BATS_TMPDIR/project/.git"
   mkdir -p "$BATS_TMPDIR/project/sub"
   # No .copilot/ in project
-  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" myarg"
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" myarg"
   [ "$status" -eq 0 ]
   ! grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args" 2>/dev/null || true
   grep -qx "myarg" "$BATS_TMPDIR/stub_args"
@@ -552,7 +552,7 @@ run_wrapper_in_subdir() {
   mkdir -p "$BATS_TMPDIR/project/.git"
   write_project_config '{"--allow-tool":["bash"]}'
   mkdir -p "$BATS_TMPDIR/project/sub"
-  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-cli\" myarg"
+  run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" myarg"
   [ "$status" -eq 0 ]
   grep -qx -- "--allow-tool" "$BATS_TMPDIR/stub_args"
   grep -qx "bash" "$BATS_TMPDIR/stub_args"
