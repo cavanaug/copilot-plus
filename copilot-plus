@@ -155,11 +155,11 @@ do_version=0
 user_args=()
 for arg in "$@"; do
   case "$arg" in
-    ++cmd|+c)      do_cmd=1 ;;
-    ++env|+e)      do_env=1 ;;
-    ++verbose|+V)  do_verbose=1 ;;
+    ++cmd)         do_cmd=1 ;;
+    ++env)         do_env=1 ;;
+    ++verbose|+v)  do_verbose=1 ;;
     ++help|+h)     do_help=1 ;;
-    ++version|+v)  do_version=1 ;;
+    ++version|+V)  do_version=1 ;;
     *)             user_args+=("$arg") ;;
   esac
 done
@@ -167,15 +167,15 @@ done
 # ++help / +h (check first so it works even with bad args)
 if [[ "$do_help" -eq 1 ]]; then
   printf 'copilot-plus ++ options:\n'
-  printf '  ++cmd,     +c  print the command that would be run, then exit\n'
-  printf '  ++env,     +e  print COPILOT_ARGS value, then exit\n'
-  printf '  ++verbose, +V  print command and COPILOT_ARGS, then run normally\n'
-  printf '  ++help,    +h  show this help\n'
-  printf '  ++version, +v  print version and exit\n'
+  printf '  ++cmd           print the command that would be run, then exit\n'
+  printf '  ++env           print COPILOT_ARGS value, then exit\n'
+  printf '  ++verbose, +v   print command and COPILOT_ARGS, then run normally\n'
+  printf '  ++help,    +h   show this help\n'
+  printf '  ++version, +V   print version and exit\n'
   exit 0
 fi
 
-# ++version / +v
+# ++version / +V
 if [[ "$do_version" -eq 1 ]]; then
   printf 'copilot-plus %s\n' "$VERSION"
   exit 0
@@ -196,19 +196,19 @@ print_cmd() {
   printf '\n'
 }
 
-# ++cmd / +c: print command and exit
+# ++cmd: print command and exit
 if [[ "$do_cmd" -eq 1 ]]; then
   print_cmd
   exit 0
 fi
 
-# ++env / +e: print COPILOT_ARGS and exit
+# ++env: print COPILOT_ARGS and exit
 if [[ "$do_env" -eq 1 ]]; then
   printf '%s\n' "$COPILOT_ARGS"
   exit 0
 fi
 
-# ++verbose / +V: print diagnostics, then fall through to exec (intentionally no exit)
+# ++verbose / +v: print diagnostics, then fall through to exec (intentionally no exit)
 if [[ "$do_verbose" -eq 1 ]]; then
   printf '[copilot-plus] cmd: '
   print_cmd
