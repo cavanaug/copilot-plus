@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 2 of 2 (Per-Project Config File Support)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-04 - Completed quick task 4: fix +test output to use proper shell quoting so it is copy-paste executable
+Last activity: 2026-03-05 - Completed quick task 7: add +version (+v) option to copilot-plus with auto-updated version field starting at 0.8.20260304
 
 Progress: [██████████] 100%
 
