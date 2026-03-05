@@ -5,7 +5,7 @@ milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
 last_updated: "2026-03-04T00:00:00Z"
-last_activity: 2026-03-04 - Completed quick task 6: refactor + options: rename +test to +cmd, add +env, +verbose, +help
+last_activity: 2026-03-05 - Completed quick task 8: refactor + options to use ++word / +char convention
 progress:
   total_phases: 2
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 2 of 2 (Per-Project Config File Support)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-05 - Completed quick task 7: add +version (+v) option to copilot-plus with auto-updated version field starting at 0.8.20260304
+Last activity: 2026-03-05 - Completed quick task 8: refactor + options to use ++word / +char convention
 
 Progress: [██████████] 100%
 
@@ -94,9 +94,10 @@ None yet.
 | 5 | fix array key merge: additive arrays, scalar overrides, type-conflict error | 2026-03-04 | a5042ef | [5-fix-array-key-merge-global-and-project-a](.planning/quick/5-fix-array-key-merge-global-and-project-a/) |
 | 6 | refactor + options: rename +test to +cmd, add +env, +verbose, +help | 2026-03-04 | a5042ef | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
 | 7 | add +version / +v option to copilot-plus | 2026-03-04 | ff344f7 | [7-add-version-v-option-to-copilot-plus-wit](.planning/quick/7-add-version-v-option-to-copilot-plus-wit/) |
+| 8 | refactor + options to use ++word / +char convention | 2026-03-05 | 65c56a6 | [8-refactor-options-to-use-char-short-form-](.planning/quick/8-refactor-options-to-use-char-short-form-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04T04:53:23Z
-Stopped at: Completed quick task 7: add +version / +v option to copilot-plus
+Last session: 2026-03-05T00:25:00Z
+Stopped at: Completed quick task 8: refactor + options to use ++word / +char convention
 Resume file: None
