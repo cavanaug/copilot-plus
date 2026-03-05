@@ -93,9 +93,10 @@ None yet.
 | 4 | fix +test output to use proper shell quoting so it is copy-paste executable | 2026-03-04 | d14fe91 | [4-fix-test-output-to-use-proper-shell-quot](.planning/quick/4-fix-test-output-to-use-proper-shell-quot/) |
 | 5 | fix array key merge: additive arrays, scalar overrides, type-conflict error | 2026-03-04 | a5042ef | [5-fix-array-key-merge-global-and-project-a](.planning/quick/5-fix-array-key-merge-global-and-project-a/) |
 | 6 | refactor + options: rename +test to +cmd, add +env, +verbose, +help | 2026-03-04 | a5042ef | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
+| 7 | add +version / +v option to copilot-plus | 2026-03-04 | ff344f7 | [7-add-version-v-option-to-copilot-plus-wit](.planning/quick/7-add-version-v-option-to-copilot-plus-wit/) |
 
 ## Session Continuity
 
 Last session: 2026-03-04T04:53:23Z
-Stopped at: Completed quick task 6: refactor + options — rename +test to +cmd, add +env +verbose +help
+Stopped at: Completed quick task 7: add +version / +v option to copilot-plus
 Resume file: None
