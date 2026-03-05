@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+VERSION="0.8.20260304"
+
 GLOBAL_CONFIG="${HOME}/.copilot/config.json"
 
 # Walk upward from $PWD to find the nearest .copilot/ directory.
@@ -70,7 +72,7 @@ read_config_flags() {
     case "$vtype" in
       array)
         while IFS= read -r element; do
-          _flags_ref+=("$key" "$element")
+          _flags_ref+=("$key" "$(envsubst <<< "$element")")
         done < <(jq -r --arg k "$key" '.[$k][]' "$config_file")
         ;;
       boolean)
@@ -84,7 +86,7 @@ read_config_flags() {
       string|number)
         local val
         val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
-        _flags_ref+=("$key" "$val")
+        _flags_ref+=("$key" "$(envsubst <<< "$val")")
         ;;
       object|null|*)
         echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
@@ -149,6 +151,7 @@ do_cmd=0
 do_env=0
 do_verbose=0
 do_help=0
+do_version=0
 user_args=()
 for arg in "$@"; do
   case "$arg" in
@@ -156,6 +159,8 @@ for arg in "$@"; do
     +env)     do_env=1 ;;
     +verbose) do_verbose=1 ;;
     +help)    do_help=1 ;;
+    +version) do_version=1 ;;
+    +v)       do_version=1 ;;
     *)        user_args+=("$arg") ;;
   esac
 done
@@ -167,15 +172,28 @@ if [[ "$do_help" -eq 1 ]]; then
   printf '  +env      print COPILOT_ARGS value, then exit\n'
   printf '  +verbose  print command and COPILOT_ARGS, then run normally\n'
   printf '  +help     show this help\n'
+  printf '  +version  print version and exit\n'
+  printf '  +v        alias for +version\n'
+  exit 0
+fi
+
+# +version / +v
+if [[ "$do_version" -eq 1 ]]; then
+  printf 'copilot-plus %s\n' "$VERSION"
   exit 0
 fi
 
 # Shared helper: print the command that would be run
+# --flags are printed bare; value arguments are double-quoted (inner " escaped as \")
 print_cmd() {
   local cmd=(copilot "${config_flags[@]+"${config_flags[@]}"}" "${user_args[@]+"${user_args[@]}"}")
   printf '%s' "${cmd[0]}"
   for part in "${cmd[@]:1}"; do
-    printf ' "%s"' "${part//\"/\\\"}"
+    if [[ "$part" == --* ]]; then
+      printf ' %s' "$part"
+    else
+      printf ' "%s"' "${part//\"/\\\"}"
+    fi
   done
   printf '\n'
 }
