@@ -601,6 +601,37 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
+# EXT-02f..EXT-02h: --add-dir non-existent directory omission
+# ============================================================
+
+@test "EXT-02f: --add-dir value is a nonexistent directory → omitted from args" {
+  write_project_config '{"--add-dir":["/nonexistent/path/that/does/not/exist"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  ! grep -qx "/nonexistent/path/that/does/not/exist" "$BATS_TMPDIR/stub_args"
+}
+
+@test "EXT-02g: --add-dir value is an existing directory (/tmp) → still passed" {
+  write_project_config '{"--add-dir":["/tmp"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "/tmp" "$BATS_TMPDIR/stub_args"
+}
+
+@test "EXT-02h: --add-dir array with one existing + one nonexistent → only existing one passed" {
+  write_project_config "{\"--add-dir\":[\"/tmp\",\"/nonexistent/path/that/does/not/exist\"]}"
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
+  grep -qx "/tmp" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "/nonexistent/path/that/does/not/exist" "$BATS_TMPDIR/stub_args" 2>/dev/null || true
+  # Only one --add-dir flag (for /tmp, not for the nonexistent path)
+  count=$(grep -cx -- "--add-dir" "$BATS_TMPDIR/stub_args" || echo 0)
+  [ "$count" -eq 1 ]
+}
+
+# ============================================================
 # DRY-RUN-01: +cmd → prints command to stdout, does NOT exec copilot
 # ============================================================
 
@@ -668,6 +699,37 @@ run_wrapper_in_subdir() {
   run_wrapper +cmd
   [ "$status" -eq 0 ]
   [[ "$output" == *'"shell(git:*)"'* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# DRY-RUN-07: +cmd output — --flags are unquoted, values are double-quoted
+# ============================================================
+
+@test "DRY-RUN-07: +cmd output has bare --flags and double-quoted values" {
+  write_config '{"--model":"gpt-4.1"}'
+  run_wrapper +cmd myarg
+  [ "$status" -eq 0 ]
+  # --model appears bare (no quotes around it)
+  [[ "$output" == *" --model "* ]]
+  # value is double-quoted
+  [[ "$output" == *'"gpt-4.1"'* ]]
+  # user arg is double-quoted
+  [[ "$output" == *'"myarg"'* ]]
+  [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+# ============================================================
+# DRY-RUN-08: +cmd with env var in config value → variable expanded in output
+# ============================================================
+
+@test "DRY-RUN-08: +cmd with \$HOME in config value → expanded in output" {
+  write_config "{\"--add-dir\":\"\$HOME/.copilot/tools\"}"
+  run_wrapper +cmd
+  [ "$status" -eq 0 ]
+  # Within run_wrapper, HOME is set to BATS_TMPDIR — envsubst should expand $HOME to that
+  [[ "$output" == *"$BATS_TMPDIR/.copilot/tools"* ]]
+  [[ "$output" != *'$HOME'* ]]
   [ ! -f "$BATS_TMPDIR/stub_args" ]
 }
 
