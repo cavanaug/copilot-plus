@@ -5,7 +5,7 @@ milestone_name: milestone
 status: in-progress
 stopped_at: Completed 02-per-project-config-file-support-01-PLAN.md
 last_updated: "2026-03-04T00:00:00Z"
-last_activity: 2026-03-05 - Completed quick task 8: refactor + options to use ++word / +char convention
+last_activity: 2026-03-06 - Completed quick task 9: omit non-existent --add-dir paths from CLI
 progress:
   total_phases: 2
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 2 of 2 (Per-Project Config File Support)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-03-05 - Completed quick task 8: refactor + options to use ++word / +char convention
+Last activity: 2026-03-06 - Completed quick task 9: omit non-existent --add-dir paths from CLI
 
 Progress: [██████████] 100%
 
@@ -95,9 +95,10 @@ None yet.
 | 6 | refactor + options: rename +test to +cmd, add +env, +verbose, +help | 2026-03-04 | a5042ef | [6-refactor-options-rename-test-to-cmd-add-](.planning/quick/6-refactor-options-rename-test-to-cmd-add-/) |
 | 7 | add +version / +v option to copilot-plus | 2026-03-04 | ff344f7 | [7-add-version-v-option-to-copilot-plus-wit](.planning/quick/7-add-version-v-option-to-copilot-plus-wit/) |
 | 8 | refactor + options to use ++word / +char convention | 2026-03-05 | 65c56a6 | [8-refactor-options-to-use-char-short-form-](.planning/quick/8-refactor-options-to-use-char-short-form-/) |
+| 9 | omit non-existent --add-dir paths from CLI | 2026-03-06 | 9f3b54e | [9-when-building-the-cli-if-the-directory-b](.planning/quick/9-when-building-the-cli-if-the-directory-b/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05T00:25:00Z
-Stopped at: Completed quick task 8: refactor + options to use ++word / +char convention
+Last session: 2026-03-06T00:00:00Z
+Stopped at: Completed quick task 9: omit non-existent --add-dir paths from CLI
 Resume file: None
