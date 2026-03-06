@@ -625,10 +625,7 @@ run_wrapper_in_subdir() {
   [ "$status" -eq 0 ]
   grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args"
   grep -qx "/tmp" "$BATS_TMPDIR/stub_args"
-  ! grep -qx "/nonexistent/path/that/does/not/exist" "$BATS_TMPDIR/stub_args" 2>/dev/null || true
-  # Only one --add-dir flag (for /tmp, not for the nonexistent path)
-  count=$(grep -cx -- "--add-dir" "$BATS_TMPDIR/stub_args" || echo 0)
-  [ "$count" -eq 1 ]
+  ! grep -qx "/nonexistent/path/that/does/not/exist" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================

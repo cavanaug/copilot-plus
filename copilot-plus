@@ -10,35 +10,35 @@ GLOBAL_CONFIG="${HOME}/.copilot/config.json"
 # Also stops at HOME boundary to prevent global ~/.copilot/ from being treated as project config.
 # Sets PROJECT_CONFIG and PROJECT_ROOT.
 find_project_config() {
-  local dir="$PWD"
-  while true; do
-    if [[ -d "$dir/.copilot" ]]; then
-      PROJECT_CONFIG="$dir/.copilot/config.json"
-      PROJECT_ROOT="$dir"
-      return
-    fi
-    if [[ -d "$dir/.git" ]]; then
-      # Reached git root without finding .copilot/ — no project config
-      PROJECT_CONFIG=""
-      PROJECT_ROOT=""
-      return
-    fi
-    local parent
-    parent="$(dirname "$dir")"
-    # Stop at HOME boundary — don't pick up global ~/.copilot as project config
-    if [[ "$parent" == "$HOME" ]] || [[ "$dir" == "$HOME" ]]; then
-      PROJECT_CONFIG=""
-      PROJECT_ROOT=""
-      return
-    fi
-    if [[ "$parent" == "$dir" ]]; then
-      # Reached filesystem root
-      PROJECT_CONFIG=""
-      PROJECT_ROOT=""
-      return
-    fi
-    dir="$parent"
-  done
+    local dir="$PWD"
+    while true; do
+        if [[ -d "$dir/.copilot" ]]; then
+            PROJECT_CONFIG="$dir/.copilot/config.json"
+            PROJECT_ROOT="$dir"
+            return
+        fi
+        if [[ -d "$dir/.git" ]]; then
+            # Reached git root without finding .copilot/ — no project config
+            PROJECT_CONFIG=""
+            PROJECT_ROOT=""
+            return
+        fi
+        local parent
+        parent="$(dirname "$dir")"
+        # Stop at HOME boundary — don't pick up global ~/.copilot as project config
+        if [[ "$parent" == "$HOME" ]] || [[ "$dir" == "$HOME" ]]; then
+            PROJECT_CONFIG=""
+            PROJECT_ROOT=""
+            return
+        fi
+        if [[ "$parent" == "$dir" ]]; then
+            # Reached filesystem root
+            PROJECT_CONFIG=""
+            PROJECT_ROOT=""
+            return
+        fi
+        dir="$parent"
+    done
 }
 
 PROJECT_CONFIG=""
@@ -49,63 +49,74 @@ find_project_config
 # Usage: read_config_flags <config_file> <array_ref> <skip_keys_assoc_array_ref>
 # skip_keys_assoc_array_ref: associative array of keys to skip (for key-level override)
 read_config_flags() {
-  local config_file="$1"
-  local -n _flags_ref="$2"
-  local -n _skip_ref="$3"
+    local config_file="$1"
+    local -n _flags_ref="$2"
+    local -n _skip_ref="$3"
 
-  [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 0
+    [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 0
 
-  if ! jq empty "$config_file" 2>/dev/null; then
-    echo "copilot-plus: error: invalid JSON in $config_file" >&2
-    exit 1
-  fi
-
-  while IFS= read -r key; do
-    # Key-level override: skip keys that appear in the project config
-    if [[ -v _skip_ref["$key"] ]]; then
-      continue
+    if ! jq empty "$config_file" 2>/dev/null; then
+        echo "copilot-plus: error: invalid JSON in $config_file" >&2
+        exit 1
     fi
 
-    local vtype
-    vtype=$(jq -r --arg k "$key" '.[$k] | type' "$config_file")
-
-    case "$vtype" in
-      array)
-        while IFS= read -r element; do
-          _flags_ref+=("$key" "$(envsubst <<< "$element")")
-        done < <(jq -r --arg k "$key" '.[$k][]' "$config_file")
-        ;;
-      boolean)
-        local val
-        val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
-        if [[ "$val" == "true" ]]; then
-          _flags_ref+=("$key")
+    while IFS= read -r key; do
+        # Key-level override: skip keys that appear in the project config
+        if [[ -v _skip_ref["$key"] ]]; then
+            continue
         fi
-        # false → skip entirely
-        ;;
-      string|number)
-        local val
-        val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
-        _flags_ref+=("$key" "$(envsubst <<< "$val")")
-        ;;
-      object|null|*)
-        echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
-        exit 1
-        ;;
-    esac
-  done < <(jq -r 'keys[] | select(startswith("--"))' "$config_file")
+
+        local vtype
+        vtype=$(jq -r --arg k "$key" '.[$k] | type' "$config_file")
+
+        case "$vtype" in
+        array)
+            while IFS= read -r element; do
+                local expanded
+                expanded="$(envsubst <<<"$element")"
+                if [[ "$key" == "--add-dir" ]] && [[ ! -d "$expanded" ]]; then
+                    continue
+                fi
+                _flags_ref+=("$key" "$expanded")
+            done < <(jq -r --arg k "$key" '.[$k][]' "$config_file")
+            ;;
+        boolean)
+            local val
+            val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
+            if [[ "$val" == "true" ]]; then
+                _flags_ref+=("$key")
+            fi
+            # false → skip entirely
+            ;;
+        string | number)
+            local val
+            val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
+            local expanded
+            expanded="$(envsubst <<<"$val")"
+            if [[ "$key" == "--add-dir" ]] && [[ ! -d "$expanded" ]]; then
+                : # skip non-existent directory
+            else
+                _flags_ref+=("$key" "$expanded")
+            fi
+            ;;
+        object | null | *)
+            echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
+            exit 1
+            ;;
+        esac
+    done < <(jq -r 'keys[] | select(startswith("--"))' "$config_file")
 }
 
 # Collect project keys for key-level override (skip map for global processing)
 declare -A project_keys=()
 if [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
-  if ! jq empty "$PROJECT_CONFIG" 2>/dev/null; then
-    echo "copilot-plus: error: invalid JSON in $PROJECT_CONFIG" >&2
-    exit 1
-  fi
-  while IFS= read -r key; do
-    project_keys["$key"]=1
-  done < <(jq -r 'to_entries[] | select(.key | startswith("--")) | select(.value | type != "array") | .key' "$PROJECT_CONFIG")
+    if ! jq empty "$PROJECT_CONFIG" 2>/dev/null; then
+        echo "copilot-plus: error: invalid JSON in $PROJECT_CONFIG" >&2
+        exit 1
+    fi
+    while IFS= read -r key; do
+        project_keys["$key"]=1
+    done < <(jq -r 'to_entries[] | select(.key | startswith("--")) | select(.value | type != "array") | .key' "$PROJECT_CONFIG")
 fi
 
 # Build combined flags: global (minus overridden keys) + project
@@ -113,36 +124,36 @@ config_flags=()
 declare -A no_skip=()
 
 # Type-conflict check: same key in both configs must have matching type (array vs scalar)
-if [[ -f "$GLOBAL_CONFIG" ]] && [[ -r "$GLOBAL_CONFIG" ]] && \
-   [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
-  while IFS=$'\t' read -r key gtype ptype; do
-    if { [[ "$gtype" == "array" ]] && [[ "$ptype" != "array" ]]; } || \
-       { [[ "$gtype" != "array" ]] && [[ "$ptype" == "array" ]]; }; then
-      echo "copilot-plus: error: type conflict for key '$key': '$gtype' in global config, '$ptype' in project config" >&2
-      exit 1
-    fi
-  done < <(jq -rn \
-    --slurpfile g "$GLOBAL_CONFIG" \
-    --slurpfile p "$PROJECT_CONFIG" \
-    '($g[0] | to_entries[] | select(.key | startswith("--")) | {key: .key, t: (.value | type)}) as $ge |
+if [[ -f "$GLOBAL_CONFIG" ]] && [[ -r "$GLOBAL_CONFIG" ]] &&
+    [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
+    while IFS=$'\t' read -r key gtype ptype; do
+        if { [[ "$gtype" == "array" ]] && [[ "$ptype" != "array" ]]; } ||
+            { [[ "$gtype" != "array" ]] && [[ "$ptype" == "array" ]]; }; then
+            echo "copilot-plus: error: type conflict for key '$key': '$gtype' in global config, '$ptype' in project config" >&2
+            exit 1
+        fi
+    done < <(jq -rn \
+        --slurpfile g "$GLOBAL_CONFIG" \
+        --slurpfile p "$PROJECT_CONFIG" \
+        '($g[0] | to_entries[] | select(.key | startswith("--")) | {key: .key, t: (.value | type)}) as $ge |
      ($p[0] | to_entries[] | select(.key == $ge.key)) |
      [$ge.key, $ge.t, (.value | type)] | @tsv')
 fi
 read_config_flags "$GLOBAL_CONFIG" config_flags project_keys
 read_config_flags "$PROJECT_CONFIG" config_flags no_skip
 
-# Auto-inject project root as --add-dir if a .copilot/ was found via upward search
-if [[ -n "$PROJECT_ROOT" ]]; then
-  config_flags+=("--add-dir" "$PROJECT_ROOT")
+# Auto-inject project root as --add-dir if a .copilot/ was found via upward search (only if dir exists)
+if [[ -n "$PROJECT_ROOT" ]] && [[ -d "$PROJECT_ROOT" ]]; then
+    config_flags+=("--add-dir" "$PROJECT_ROOT")
 fi
 
 # Export COPILOT_ARGS: shell-quoted, space-separated config-injected flags only (not user args)
 # This allows nested calls: copilot $COPILOT_ARGS <new-args>
 if [[ ${#config_flags[@]} -eq 0 ]]; then
-  COPILOT_ARGS=""
+    COPILOT_ARGS=""
 else
-  COPILOT_ARGS=$(printf '%q ' "${config_flags[@]}")
-  COPILOT_ARGS="${COPILOT_ARGS% }"  # trim trailing space
+    COPILOT_ARGS=$(printf '%q ' "${config_flags[@]}")
+    COPILOT_ARGS="${COPILOT_ARGS% }" # trim trailing space
 fi
 export COPILOT_ARGS
 
@@ -154,66 +165,68 @@ do_help=0
 do_version=0
 user_args=()
 for arg in "$@"; do
-  case "$arg" in
-    ++cmd)         do_cmd=1 ;;
-    ++env)         do_env=1 ;;
-    ++verbose|+v)  do_verbose=1 ;;
-    ++help|+h)     do_help=1 ;;
-    ++version|+V)  do_version=1 ;;
-    *)             user_args+=("$arg") ;;
-  esac
+    case "$arg" in
+    ++cmd) do_cmd=1 ;;
+    ++env) do_env=1 ;;
+    ++verbose | +v) do_verbose=1 ;;
+    ++help | +h) do_help=1 ;;
+    ++version | +V) do_version=1 ;;
+    *) user_args+=("$arg") ;;
+    esac
 done
 
 # ++help / +h (check first so it works even with bad args)
 if [[ "$do_help" -eq 1 ]]; then
-  printf 'copilot-plus ++ options:\n'
-  printf '  ++cmd           print the command that would be run, then exit\n'
-  printf '  ++env           print COPILOT_ARGS value, then exit\n'
-  printf '  ++verbose, +v   print command and COPILOT_ARGS, then run normally\n'
-  printf '  ++help,    +h   show this help\n'
-  printf '  ++version, +V   print version and exit\n'
-  exit 0
+    printf 'copilot-plus options:\n'
+    printf '  ++cmd           print the command that would be run, then exit\n'
+    printf '  ++env           print COPILOT_ARGS value, then exit\n'
+    printf '  ++verbose, +v   print command and COPILOT_ARGS, then run normally\n'
+    printf '  ++help,    +h   show this help\n'
+    printf '  ++version, +V   print version and exit\n'
+    printf '\n'
+    printf '  --xxx, -x       all other params passed to copilot\n'
+    exit 0
 fi
 
 # ++version / +V
 if [[ "$do_version" -eq 1 ]]; then
-  printf 'copilot-plus %s\n' "$VERSION"
-  exit 0
+    printf 'copilot-plus %s\n' "$VERSION"
+    exit 0
 fi
 
 # Shared helper: print the command that would be run
 # --flags are printed bare; value arguments are double-quoted (inner " escaped as \")
 print_cmd() {
-  local cmd=(copilot "${config_flags[@]+"${config_flags[@]}"}" "${user_args[@]+"${user_args[@]}"}")
-  printf '%s' "${cmd[0]}"
-  for part in "${cmd[@]:1}"; do
-    if [[ "$part" == --* ]]; then
-      printf ' %s' "$part"
-    else
-      printf ' "%s"' "${part//\"/\\\"}"
-    fi
-  done
-  printf '\n'
+    local cmd=(copilot "${config_flags[@]+"${config_flags[@]}"}" "${user_args[@]+"${user_args[@]}"}")
+    printf '%s' "${cmd[0]}"
+    for part in "${cmd[@]:1}"; do
+        if [[ "$part" == --* ]]; then
+            printf ' %s' "$part"
+        else
+            printf ' "%s"' "${part//\"/\\\"}"
+        fi
+    done
+    printf '\n'
 }
 
 # ++cmd: print command and exit
 if [[ "$do_cmd" -eq 1 ]]; then
-  print_cmd
-  exit 0
+    print_cmd
+    exit 0
 fi
 
 # ++env: print COPILOT_ARGS and exit
 if [[ "$do_env" -eq 1 ]]; then
-  printf '%s\n' "$COPILOT_ARGS"
-  exit 0
+    printf '%s\n' "$COPILOT_ARGS"
+    exit 0
 fi
 
 # ++verbose / +v: print diagnostics, then fall through to exec (intentionally no exit)
 if [[ "$do_verbose" -eq 1 ]]; then
-  printf '[copilot-plus] cmd: '
-  print_cmd
-  printf '[copilot-plus] env: COPILOT_ARGS=%s\n' "$COPILOT_ARGS"
-  # intentionally no exit — falls through to exec below
+    printf '[copilot-plus] cmd: '
+    print_cmd
+    printf '[copilot-plus] env: COPILOT_ARGS=%s\n' "$COPILOT_ARGS"
+    # intentionally no exit — falls through to exec below
 fi
 
 exec copilot "${config_flags[@]+"${config_flags[@]}"}" "${user_args[@]+"${user_args[@]}"}"
