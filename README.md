@@ -4,6 +4,8 @@
 
 It exists to make Copilot runs safer and more consistent by auto-applying config-derived flags, preserving project scope, and exposing inspectable wrapper controls.
 
+If you mainly want to set config keys fast, jump to `Quick start: config by example`.
+
 ## Project overview
 
 - Wraps `copilot` and preserves native CLI behavior by default.
@@ -110,6 +112,62 @@ Show computed config args only:
 copilot ++env
 ```
 
+### Quick start: config by example
+
+Create global config:
+
+```bash
+mkdir -p ~/.copilot
+```
+
+`~/.copilot/config.json`
+
+```json
+{
+  "--model": "gpt-5",
+  "--allow-tool": ["bash", "read", "write"],
+  "--yolo": false,
+  "--max-autopilot-continues": 3
+}
+```
+
+Add project-specific overrides in your repo:
+
+```bash
+mkdir -p .copilot
+```
+
+`.copilot/config.json`
+
+```json
+{
+  "--model": "gpt-5-codex",
+  "--allow-tool": ["shell(git:*)"],
+  "--add-dir": ["$HOME/.copilot/tools", "./scripts"]
+}
+```
+
+What this does in practice:
+
+- `--model` (scalar): project value overrides global value.
+- `--allow-tool` (array): project values are added after global values.
+- `--yolo: false`: omitted entirely.
+- `--add-dir`: each value becomes another `--add-dir <path>`; missing directories are skipped.
+- `$HOME` and other env vars inside string values are expanded.
+
+Check exactly what will be used:
+
+```bash
+copilot ++env
+copilot ++cmd "explain this file"
+```
+
+Rule of thumb for adding keys:
+
+- Key must start with `--` (otherwise ignored).
+- Value can be `string`, `number`, `boolean`, or `array`.
+- `object` and `null` values are rejected with an error.
+
 ### Common workflows
 
 Run normally (wrapper injects config flags automatically):
@@ -161,6 +219,14 @@ Notes:
 - `++version` or `+V` prints wrapper version and exits.
 
 All non-wrapper arguments are passed through to `copilot` unchanged.
+
+### `COPILOT_ARGS` and recursive calls
+
+`copilot-plus` exports `COPILOT_ARGS` as the shell-quoted, config-derived flags for the current context.
+
+This is intended for nested/subagent invocations of `copilot-plus` so child calls can reuse the same policy without recomputing or dropping arguments.
+
+In other words, it supports recursive invocation patterns while preserving the same effective config boundaries.
 
 ## Failure modes
 
