@@ -14,8 +14,10 @@ must_haves:
   truths:
     - "Array keys (--add-dir, --allow-tool) from both global AND project config are all passed to copilot"
     - "Scalar keys (--model, --yolo) from project config replace the global value entirely"
+    - "Type conflict (array in one config, scalar in other for same key) → exit non-zero with error on stderr, stub not called"
     - "EXT-01g/h tests pass using a scalar key for override"
     - "New additive-array tests pass confirming global + project values both appear"
+    - "New type-conflict test passes confirming error on mismatch"
   artifacts:
     - path: "copilot-plus"
       provides: "Fixed project_keys skip-map (scalar-only)"
@@ -211,6 +213,63 @@ Insert EXT-01k and EXT-01l immediately after the EXT-01j test block (before ERG-
     All tests pass including: updated EXT-01g (scalar override), updated EXT-01h (scalar override + other key kept),
     EXT-01k (array additive), EXT-01l (array additive + scalar override mixed).
     Zero test failures.
+  </done>
+</task>
+
+
+<task type="auto" tdd="true">
+  <name>Task 3: Add type-conflict detection and EXT-01m test</name>
+  <files>copilot-plus, tests/copilot.bats</files>
+  <behavior>
+    - If the same key exists in BOTH global and project config and has type array in one and scalar (string/number/bool) in the other → print error to stderr and exit non-zero. Stub must NOT be called.
+    - All other behavior is unchanged.
+  </behavior>
+  <action>
+In `copilot-plus`, after building `project_keys` (post Task 1), add a type-conflict check that
+iterates keys present in BOTH configs and compares types:
+
+```bash
+# Type-conflict check: same key in both configs must have matching type (array vs scalar)
+if [[ -f "$GLOBAL_CONFIG" ]] && [[ -r "$GLOBAL_CONFIG" ]] && \
+   [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
+  while IFS=$'\t' read -r key gtype ptype; do
+    if { [[ "$gtype" == "array" ]] && [[ "$ptype" != "array" ]]; } || \
+       { [[ "$gtype" != "array" ]] && [[ "$ptype" == "array" ]]; }; then
+      echo "copilot-plus: error: type conflict for key '$key': '$gtype' in global config, '$ptype' in project config" >&2
+      exit 1
+    fi
+  done < <(jq -rn \
+    --argfile g "$GLOBAL_CONFIG" \
+    --argfile p "$PROJECT_CONFIG" \
+    '($g | to_entries[] | select(.key | startswith("--")) | {key: .key, t: (.value | type)}) as $ge |
+     ($p | to_entries[] | select(.key == $ge.key)) |
+     [$ge.key, $ge.t, (.value | type)] | @tsv')
+fi
+```
+
+In `tests/copilot.bats`, add EXT-01m immediately after EXT-01l:
+
+```bash
+# ============================================================
+# EXT-01m: Type conflict (scalar in global, array in project) → error, exit non-zero
+# ============================================================
+
+@test "EXT-01m: type conflict for same key → error on stderr, exit non-zero, stub not called" {
+  write_config '{"--model":"gpt-4"}'
+  write_project_config '{"--model":["gpt-4"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "type conflict"
+  [ ! -f "$BATS_TMPDIR/stub_args" ] || ! grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+```
+  </action>
+  <verify>
+    <automated>bats tests/copilot.bats 2>&1 | grep -E "^(ok|not ok|FAILED|[0-9]+ tests)"</automated>
+  </verify>
+  <done>
+    EXT-01m passes: exit non-zero with "type conflict" in stderr output, stub not called.
+    All other tests still pass.
   </done>
 </task>
 
