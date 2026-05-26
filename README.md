@@ -2,14 +2,14 @@
 
 `copilot-plus` is a thin Bash wrapper around the GitHub Copilot CLI.
 
-It exists to make Copilot runs safer and more consistent by auto-applying config-derived flags, preserving project scope, and exposing inspectable wrapper controls.
+It exists to make Copilot runs safer and more consistent by auto-applying launch policy, preserving project scope, and exposing inspectable wrapper controls.
 
-If you mainly want to set config keys fast, jump to `Quick start: config by example`.
+If you mainly want the modern Copilot/native split, jump to `Configuration Ownership`.
 
 ## Project overview
 
 - Wraps `copilot` and preserves native CLI behavior by default.
-- Injects config-derived flags automatically from global and project config.
+- Injects wrapper-managed launch flags automatically from global and project policy.
 - Adds wrapper-only operational helpers for visibility and debugging.
 - Keeps wrapper options in a separate namespace so upstream flag collisions are avoided.
 
@@ -26,15 +26,27 @@ This is a general wrapper pattern: reserve a dedicated option namespace so wrapp
 
 ## Why this exists
 
-We do not want to maintain this wrapper forever.
+We do not want to maintain this wrapper forever, but broad deprecation is not justified yet.
 
-`copilot-plus` exists because current Copilot CLI behavior is not sufficient for this workflow:
+`copilot-plus` started as a workaround for early Copilot CLI versions that lacked durable settings, repo-local settings, custom instructions, trusted folders, and remembered permissions.
 
-- Global and per-project config handling is not ergonomic enough for daily use.
-- Repeating permission/context flags on every invocation is error-prone.
-- Team consistency drifts when each engineer runs different ad hoc launch args.
+Modern Copilot CLI now provides a substantial native configuration surface:
 
-Preferred future state: remove this project once Copilot CLI natively supports the same workflow with equivalent safety and consistency.
+- `~/.copilot/settings.json`
+- `.github/copilot/settings.json`
+- `.github/copilot/settings.local.json`
+- repository instructions via `copilot init`
+- trusted folders and remembered permissions
+
+That closes many of the original gaps, but it does not replace this wrapper completely.
+
+The wrapper is still useful for:
+
+- startup injection of CLI-only launch policy such as `--allow-tool`, `--deny-tool`, `--available-tools`, `--excluded-tools`, `--add-dir`, and `--max-autopilot-continues`
+- consistent global + project merge behavior for that policy
+- dry-run and inspection helpers such as `++cmd`, `++env`, `++verbose`, and `COPILOT_ARGS`
+
+The main modernization target is separating wrapper policy from upstream-managed Copilot config files more cleanly.
 
 ## Safety stance
 
@@ -70,12 +82,65 @@ Possible goals:
 
 This is future work, not part of the current implementation.
 
+## Configuration Ownership
+
+Prefer native Copilot settings whenever there is a documented `settings.json` key. Use wrapper policy only for startup behavior that still exists primarily as CLI flags.
+
+| Prefer native Copilot | Keep wrapper-managed |
+| --- | --- |
+| `model` | `--allow-tool`, `--deny-tool` |
+| `allowedUrls`, `deniedUrls` | `--available-tools`, `--excluded-tools` |
+| `trustedFolders` | `--add-dir` |
+| `askUser`, `screenReader` | `--max-autopilot-continues` |
+| `theme`, `stream`, `logLevel`, `autoUpdate` | `++cmd`, `++env`, `++verbose` |
+| native hooks and `.github/copilot/*.json` settings | `COPILOT_ARGS` and global+project launch-policy merge |
+
+Rule of thumb:
+
+- If Copilot documents a native `settings.json` key for a behavior, prefer native config.
+- If the behavior is primarily a launch-time CLI flag or wrapper-only inspection feature, keep it in wrapper policy under the nested `copilotPlus` key inside existing Copilot settings files.
+
+## Config Files
+
+### Native Copilot files today
+
+- `~/.copilot/settings.json`
+- `.github/copilot/settings.json`
+- `.github/copilot/settings.local.json`
+
+### Wrapper files today
+
+- Preferred global wrapper policy host: `~/.copilot/settings.json` under `copilotPlus`
+- Preferred shared repo wrapper policy host: `.github/copilot/settings.json` under `copilotPlus`
+- Preferred local repo wrapper policy host: `.github/copilot/settings.local.json` under `copilotPlus`
+- Legacy fallback paths still honored: `~/.copilot/config.json` and `.copilot/config.json` top-level `--...` keys
+- Wrapper input is effectively JSONC: comments and trailing commas are accepted because the script normalizes through `hjson` before `jq`.
+
+Important:
+
+- Modern Copilot treats `~/.copilot/config.json` as managed application state.
+- `copilot-plus` now prefers existing Copilot `settings.json` files and only falls back to legacy top-level `--...` entries in `config.json` for compatibility.
+
+### Recommended future wrapper layout
+
+- Global wrapper policy: `~/.copilot/settings.json` under `copilotPlus`
+- Shared repo wrapper policy: `.github/copilot/settings.json` under `copilotPlus`
+- Local repo wrapper policy: `.github/copilot/settings.local.json` under `copilotPlus`
+
+Rationale:
+
+- extends existing Copilot config files instead of inventing another file
+- keeps wrapper-only launch policy namespaced away from native settings
+- still avoids normal use of upstream-managed `config.json`
+
 ## Runbook
 
 ### Prerequisites
 
 - `bash`
 - `jq`
+- `hjson`
+- `envsubst` (usually from `gettext`)
 - `copilot` on `PATH`
 
 ### Install
@@ -112,65 +177,73 @@ Show computed config args only:
 copilot ++env
 ```
 
-### Quick start: config by example
+Note:
 
-Create global config:
+- `++verbose` prints diagnostics and then still executes `copilot`.
 
-```bash
-mkdir -p ~/.copilot
-```
+### Quick start: modern split
 
-`~/.copilot/config.json`
+Put native Copilot settings in `~/.copilot/settings.json`:
 
-```json
+```jsonc
 {
-  "--model": "gpt-5",
-  "--allow-tool": ["bash", "read", "write"],
-  "--yolo": false,
-  "--max-autopilot-continues": 3
+  "model": "gpt-5.4",
+  "allowedUrls": ["https://docs.github.com"],
+  "trustedFolders": ["/abs/path/to/workspaces"]
 }
 ```
 
-Add project-specific overrides in your repo:
+Put wrapper launch policy in the current implementation paths only for behavior that does not have a documented native settings key.
 
-```bash
-mkdir -p .copilot
-```
+Preferred global wrapper path:
 
-`.copilot/config.json`
+`~/.copilot/settings.json`
 
-```json
+```jsonc
 {
-  "--model": "gpt-5-codex",
-  "--allow-tool": ["shell(git:*)"],
-  "--add-dir": ["$HOME/.copilot/tools", "./scripts"]
+  "theme": "github-dark-tritanopia",
+  "copilotPlus": {
+    "--allow-tool": ["shell(git:*)", "write"],
+    "--deny-tool": ["shell(git push)"],
+    "--max-autopilot-continues": 3
+  }
 }
 ```
 
-What this does in practice:
+Preferred shared repo wrapper path:
 
-- `--model` (scalar): project value overrides global value.
-- `--allow-tool` (array): project values are added after global values.
-- `--yolo: false`: omitted entirely.
-- `--add-dir`: each value becomes another `--add-dir <path>`; missing directories are skipped.
-- `$HOME` and other env vars inside string values are expanded.
+`.github/copilot/settings.json`
 
-Check exactly what will be used:
-
-```bash
-copilot ++env
-copilot ++cmd "explain this file"
+```jsonc
+{
+  "copilotPlus": {
+    "--add-dir": ["./scripts"]
+  }
+}
 ```
 
-Rule of thumb for adding keys:
+Preferred local repo override path:
 
-- Key must start with `--` (otherwise ignored).
-- Value can be `string`, `number`, `boolean`, or `array`.
-- `object` and `null` values are rejected with an error.
+`.github/copilot/settings.local.json`
+
+```jsonc
+{
+  "copilotPlus": {
+    "--model": "gpt-5.4"
+  }
+}
+```
+
+Legacy fallback paths still honored during migration, using top-level `--...` keys:
+
+- `~/.copilot/config.json`
+- `.copilot/config.json`
+
+Avoid repeating native settings such as `model`, `allowedUrls`, or `trustedFolders` in wrapper policy.
 
 ### Common workflows
 
-Run normally (wrapper injects config flags automatically):
+Run normally (wrapper injects launch policy automatically):
 
 ```bash
 copilot "summarize this module"
@@ -183,19 +256,20 @@ copilot ++cmd "do x"
 copilot ++verbose "do x"
 ```
 
-## Config resolution model
+## Current Wrapper Config Resolution
 
-`copilot-plus` resolves config in this order:
+Current implementation resolves wrapper policy in this order:
 
-1. Global config: `~/.copilot/config.json`
-2. Project config: nearest parent `.copilot/config.json` found by walking upward from current directory
+1. Preferred global wrapper config: `~/.copilot/settings.json` key `copilotPlus`, else legacy `~/.copilot/config.json`
+2. Preferred shared repo wrapper config: nearest parent `.github/copilot/settings.json` key `copilotPlus`, else legacy `.copilot/config.json`
+3. Preferred local repo override: nearest parent `.github/copilot/settings.local.json` key `copilotPlus`
 3. Auto project scope: injects `--add-dir <PROJECT_ROOT>` when project config root is found
 
 Merge rules:
 
 - Scalar key in both configs: project value overrides global value for that key.
 - Array key in both configs: values are additive (global first, project second).
-- Type conflict for same key (array vs scalar): hard error.
+- Type conflict for the same key (array vs scalar): hard error.
 
 Value mapping:
 
@@ -209,6 +283,20 @@ Notes:
 
 - Only keys that start with `--` are treated as injectable flags.
 - For `--add-dir`, non-existent directories are omitted.
+- All string values pass through `envsubst` before injection.
+- Avoid adding native Copilot settings here when a documented `settings.json` home exists.
+
+## Recommended Next Layout
+
+The current intended layout is:
+
+1. Global wrapper policy: `~/.copilot/settings.json` key `copilotPlus`
+2. Shared repo wrapper policy: nearest parent `.github/copilot/settings.json` key `copilotPlus`
+3. Local repo wrapper override: nearest parent `.github/copilot/settings.local.json` key `copilotPlus`
+4. Legacy `config.json` paths remain fallback-only compatibility paths
+5. Keep the same merge rules, value mapping, and auto-project-root `--add-dir` behavior unless there is an explicit product decision to change them
+
+This preserves the useful startup-policy layer while moving normal use off Copilot's managed `config.json` and onto existing Copilot settings files.
 
 ## Wrapper options
 
@@ -224,16 +312,14 @@ All non-wrapper arguments are passed through to `copilot` unchanged.
 
 `copilot-plus` exports `COPILOT_ARGS` as the shell-quoted, config-derived flags for the current context.
 
-This is intended for nested/subagent invocations of `copilot-plus` so child calls can reuse the same policy without recomputing or dropping arguments.
-
-In other words, it supports recursive invocation patterns while preserving the same effective config boundaries.
+This is intended for nested or subagent invocations of `copilot-plus` so child calls can reuse the same policy without recomputing or dropping arguments.
 
 ## Failure modes
 
-- Invalid JSON in config: exits with error before launching `copilot`.
+- Invalid JSON or JSONC in wrapper config: exits with error before launching `copilot`.
 - Unsupported config value type: exits with error.
-- Key type conflict between global and project config: exits with error.
-- Missing/unreadable config files: silent passthrough.
+- Key type conflict between global and project wrapper config: exits with error.
+- Missing or unreadable wrapper config files: silent passthrough.
 
 ## Tests
 
@@ -243,14 +329,14 @@ Run tests with Bats:
 bats tests/copilot.bats
 ```
 
-The test suite validates config parsing, merge behavior, option handling, and execution semantics.
+The test suite validates wrapper config parsing, merge behavior, option handling, and execution semantics.
 
-## Deprecation criteria
+## Reduction Criteria
 
-This wrapper should be removed when Copilot CLI can natively provide:
+This wrapper can shrink further or be retired when Copilot CLI natively provides all of the following with documented support:
 
-- Reliable global + project config behavior.
-- Safe permission defaults suitable for real-world use.
-- Equivalent observability/debuggability for effective runtime args.
+- persistent config equivalents for startup tool and path policy currently expressed as CLI flags
+- per-project launch-policy merge behavior equivalent to this wrapper
+- equivalent observability and debuggability for effective runtime args
 
-When those conditions are met, prefer upstream behavior and retire `copilot-plus`.
+When those conditions are met, prefer upstream behavior and retire or reduce `copilot-plus`.

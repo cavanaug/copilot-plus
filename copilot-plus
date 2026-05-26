@@ -3,71 +3,196 @@ set -euo pipefail
 
 VERSION="0.8.20260304"
 
-GLOBAL_CONFIG="${HOME}/.copilot/config.json"
+GLOBAL_SETTINGS="${HOME}/.copilot/settings.json"
+LEGACY_GLOBAL_CONFIG="${HOME}/.copilot/config.json"
 
-# Walk upward from $PWD to find the nearest .copilot/ directory.
-# Stops at the first .copilot/ found, or at a .git/ boundary (project root), or at /.
-# Also stops at HOME boundary to prevent global ~/.copilot/ from being treated as project config.
-# Sets PROJECT_CONFIG and PROJECT_ROOT.
-find_project_config() {
+# Strip JSONC comments (// line comments, /* block comments */) and trailing
+# commas so standard jq can parse the result.
+# Requires: hjson (brew install hjson)
+# Usage: strip_jsonc <file>   — emits clean JSON on stdout
+strip_jsonc() {
+    hjson -c "$1"
+}
+
+read_normalized_config() {
+    local config_file="$1"
+    local normalized_json
+
+    if ! normalized_json="$(strip_jsonc "$config_file" 2>/dev/null)"; then
+        echo "copilot-plus: error: invalid JSON/JSONC in $config_file" >&2
+        return 2
+    fi
+
+    if ! jq empty <<<"$normalized_json" 2>/dev/null; then
+        echo "copilot-plus: error: invalid JSON/JSONC in $config_file" >&2
+        return 2
+    fi
+
+    printf '%s\n' "$normalized_json"
+}
+
+read_settings_policy() {
+    local settings_file="$1"
+    local normalized_json
+    local status
+    local root_type
+    local policy_type
+
+    [[ -f "$settings_file" ]] && [[ -r "$settings_file" ]] || return 1
+
+    normalized_json="$(read_normalized_config "$settings_file")" || {
+        status=$?
+        return "$status"
+    }
+
+    root_type="$(jq -r 'type' <<<"$normalized_json")"
+    if [[ "$root_type" != "object" ]]; then
+        echo "copilot-plus: error: expected object root in $settings_file" >&2
+        return 2
+    fi
+
+    if [[ "$(jq -r 'has("copilotPlus")' <<<"$normalized_json")" != "true" ]]; then
+        return 1
+    fi
+
+    policy_type="$(jq -r '.copilotPlus | type' <<<"$normalized_json")"
+    if [[ "$policy_type" != "object" ]]; then
+        echo "copilot-plus: error: expected object at key 'copilotPlus' in $settings_file" >&2
+        return 2
+    fi
+
+    jq -c '.copilotPlus' <<<"$normalized_json"
+}
+
+read_legacy_policy() {
+    local config_file="$1"
+    local normalized_json
+    local status
+    local root_type
+    local policy_key_count
+
+    [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 1
+
+    normalized_json="$(read_normalized_config "$config_file")" || {
+        status=$?
+        return "$status"
+    }
+
+    root_type="$(jq -r 'type' <<<"$normalized_json")"
+    if [[ "$root_type" != "object" ]]; then
+        echo "copilot-plus: error: expected object root in $config_file" >&2
+        return 2
+    fi
+
+    policy_key_count="$(jq -r '[keys[] | select(test("^\\s*--"))] | length' <<<"$normalized_json")"
+    if [[ "$policy_key_count" == "0" ]]; then
+        return 1
+    fi
+
+    jq -c 'with_entries(select(.key | test("^\\s*--"))) | with_entries(.key |= sub("^\\s+"; ""))' <<<"$normalized_json"
+}
+
+# Walk upward from $PWD to find the nearest project with wrapper policy host files.
+# Stops at the first matching directory, or at a .git/ boundary (project root), or at /.
+# Also stops at HOME boundary to prevent global ~/.copilot files from being treated as project config.
+# Sets PROJECT_* candidate paths; PROJECT_ROOT is only assigned later if wrapper policy is actually present.
+find_project_policy_candidates() {
     local dir="$PWD"
     while true; do
-        if [[ -d "$dir/.copilot" ]]; then
-            PROJECT_CONFIG="$dir/.copilot/config.json"
-            PROJECT_ROOT="$dir"
+        local shared_settings="$dir/.github/copilot/settings.json"
+        local local_settings="$dir/.github/copilot/settings.local.json"
+        local legacy_config="$dir/.copilot/config.json"
+
+        if [[ -f "$shared_settings" ]] || [[ -f "$local_settings" ]] || [[ -f "$legacy_config" ]]; then
+            PROJECT_ROOT_CANDIDATE="$dir"
+            PROJECT_SHARED_SETTINGS="$shared_settings"
+            PROJECT_LOCAL_SETTINGS="$local_settings"
+            LEGACY_PROJECT_CONFIG="$legacy_config"
             return
         fi
+
         if [[ -d "$dir/.git" ]]; then
-            # Reached git root without finding .copilot/ — no project config
-            PROJECT_CONFIG=""
-            PROJECT_ROOT=""
+            PROJECT_ROOT_CANDIDATE=""
+            PROJECT_SHARED_SETTINGS=""
+            PROJECT_LOCAL_SETTINGS=""
+            LEGACY_PROJECT_CONFIG=""
             return
         fi
+
         local parent
         parent="$(dirname "$dir")"
-        # Stop at HOME boundary — don't pick up global ~/.copilot as project config
         if [[ "$parent" == "$HOME" ]] || [[ "$dir" == "$HOME" ]]; then
-            PROJECT_CONFIG=""
-            PROJECT_ROOT=""
+            PROJECT_ROOT_CANDIDATE=""
+            PROJECT_SHARED_SETTINGS=""
+            PROJECT_LOCAL_SETTINGS=""
+            LEGACY_PROJECT_CONFIG=""
             return
         fi
+
         if [[ "$parent" == "$dir" ]]; then
-            # Reached filesystem root
-            PROJECT_CONFIG=""
-            PROJECT_ROOT=""
+            PROJECT_ROOT_CANDIDATE=""
+            PROJECT_SHARED_SETTINGS=""
+            PROJECT_LOCAL_SETTINGS=""
+            LEGACY_PROJECT_CONFIG=""
             return
         fi
+
         dir="$parent"
     done
 }
 
-PROJECT_CONFIG=""
-PROJECT_ROOT=""
-find_project_config
+collect_non_array_keys() {
+    local policy_json="$1"
+    local -n _keys_ref="$2"
 
-# Read all -- flags from a config file into a named array (by reference)
-# Usage: read_config_flags <config_file> <array_ref> <skip_keys_assoc_array_ref>
-# skip_keys_assoc_array_ref: associative array of keys to skip (for key-level override)
-read_config_flags() {
-    local config_file="$1"
-    local -n _flags_ref="$2"
-    local -n _skip_ref="$3"
-
-    [[ -f "$config_file" ]] && [[ -r "$config_file" ]] || return 0
-
-    if ! jq empty "$config_file" 2>/dev/null; then
-        echo "copilot-plus: error: invalid JSON in $config_file" >&2
-        exit 1
-    fi
+    [[ -n "$policy_json" ]] || return 0
 
     while IFS= read -r key; do
-        # Key-level override: skip keys that appear in the project config
+        _keys_ref["$key"]=1
+    done < <(jq -r 'to_entries[] | select(.key | startswith("--")) | select(.value | type != "array") | .key' <<<"$policy_json")
+}
+
+check_policy_type_conflicts() {
+    local policy_json="$1"
+    local policy_source="$2"
+    local -n _types_ref="$3"
+    local -n _sources_ref="$4"
+
+    [[ -n "$policy_json" ]] || return 0
+
+    while IFS=$'\t' read -r key vtype; do
+        local normalized_type="scalar"
+        if [[ "$vtype" == "array" ]]; then
+            normalized_type="array"
+        fi
+
+        if [[ -v _types_ref["$key"] ]] && [[ "${_types_ref["$key"]}" != "$normalized_type" ]]; then
+            echo "copilot-plus: error: type conflict for key '$key': '${_types_ref["$key"]}' in ${_sources_ref["$key"]}, '$normalized_type' in $policy_source" >&2
+            exit 1
+        fi
+
+        _types_ref["$key"]="$normalized_type"
+        _sources_ref["$key"]="$policy_source"
+    done < <(jq -r 'to_entries[] | select(.key | startswith("--")) | [.key, (.value | type)] | @tsv' <<<"$policy_json")
+}
+
+# Read all -- flags from a policy object into a named array (by reference).
+# Usage: read_policy_flags <policy_json> <source_name> <array_ref> <skip_keys_assoc_array_ref>
+read_policy_flags() {
+    local policy_json="$1"
+    local policy_source="$2"
+    local -n _flags_ref="$3"
+    local -n _skip_ref="$4"
+
+    [[ -n "$policy_json" ]] || return 0
+
+    while IFS= read -r key; do
         if [[ -v _skip_ref["$key"] ]]; then
             continue
         fi
 
         local vtype
-        vtype=$(jq -r --arg k "$key" '.[$k] | type' "$config_file")
+        vtype=$(jq -r --arg k "$key" '.[$k] | type' <<<"$policy_json")
 
         case "$vtype" in
         array)
@@ -78,69 +203,121 @@ read_config_flags() {
                     continue
                 fi
                 _flags_ref+=("$key" "$expanded")
-            done < <(jq -r --arg k "$key" '.[$k][]' "$config_file")
+            done < <(jq -r --arg k "$key" '.[$k][]' <<<"$policy_json")
             ;;
         boolean)
             local val
-            val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
+            val=$(jq -r --arg k "$key" '.[$k]' <<<"$policy_json")
             if [[ "$val" == "true" ]]; then
                 _flags_ref+=("$key")
             fi
-            # false → skip entirely
             ;;
         string | number)
             local val
-            val=$(jq -r --arg k "$key" '.[$k]' "$config_file")
+            val=$(jq -r --arg k "$key" '.[$k]' <<<"$policy_json")
             local expanded
             expanded="$(envsubst <<<"$val")"
             if [[ "$key" == "--add-dir" ]] && [[ ! -d "$expanded" ]]; then
-                : # skip non-existent directory
+                :
             else
                 _flags_ref+=("$key" "$expanded")
             fi
             ;;
         object | null | *)
-            echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $config_file" >&2
+            echo "copilot-plus: error: unsupported value type '$vtype' for key '$key' in $policy_source" >&2
             exit 1
             ;;
         esac
-    done < <(jq -r 'keys[] | select(startswith("--"))' "$config_file")
+    done < <(jq -r 'keys[] | select(startswith("--"))' <<<"$policy_json")
 }
 
-# Collect project keys for key-level override (skip map for global processing)
-declare -A project_keys=()
-if [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
-    if ! jq empty "$PROJECT_CONFIG" 2>/dev/null; then
-        echo "copilot-plus: error: invalid JSON in $PROJECT_CONFIG" >&2
+GLOBAL_POLICY_JSON=""
+GLOBAL_POLICY_SOURCE=""
+if GLOBAL_POLICY_JSON="$(read_settings_policy "$GLOBAL_SETTINGS")"; then
+    GLOBAL_POLICY_SOURCE="$GLOBAL_SETTINGS"
+else
+    status=$?
+    if [[ "$status" -gt 1 ]]; then
         exit 1
     fi
-    while IFS= read -r key; do
-        project_keys["$key"]=1
-    done < <(jq -r 'to_entries[] | select(.key | startswith("--")) | select(.value | type != "array") | .key' "$PROJECT_CONFIG")
+
+    if GLOBAL_POLICY_JSON="$(read_legacy_policy "$LEGACY_GLOBAL_CONFIG")"; then
+        GLOBAL_POLICY_SOURCE="$LEGACY_GLOBAL_CONFIG"
+    else
+        status=$?
+        if [[ "$status" -gt 1 ]]; then
+            exit 1
+        fi
+        GLOBAL_POLICY_JSON=""
+    fi
+fi
+
+PROJECT_ROOT_CANDIDATE=""
+PROJECT_SHARED_SETTINGS=""
+PROJECT_LOCAL_SETTINGS=""
+LEGACY_PROJECT_CONFIG=""
+find_project_policy_candidates
+
+PROJECT_ROOT=""
+PROJECT_POLICY_JSON=""
+PROJECT_POLICY_SOURCE=""
+PROJECT_LOCAL_POLICY_JSON=""
+PROJECT_LOCAL_POLICY_SOURCE=""
+
+if [[ -n "$PROJECT_ROOT_CANDIDATE" ]]; then
+    if PROJECT_POLICY_JSON="$(read_settings_policy "$PROJECT_SHARED_SETTINGS")"; then
+        PROJECT_POLICY_SOURCE="$PROJECT_SHARED_SETTINGS"
+    else
+        status=$?
+        if [[ "$status" -gt 1 ]]; then
+            exit 1
+        fi
+        PROJECT_POLICY_JSON=""
+    fi
+
+    if PROJECT_LOCAL_POLICY_JSON="$(read_settings_policy "$PROJECT_LOCAL_SETTINGS")"; then
+        PROJECT_LOCAL_POLICY_SOURCE="$PROJECT_LOCAL_SETTINGS"
+    else
+        status=$?
+        if [[ "$status" -gt 1 ]]; then
+            exit 1
+        fi
+        PROJECT_LOCAL_POLICY_JSON=""
+    fi
+
+    if [[ -n "$PROJECT_POLICY_JSON" ]] || [[ -n "$PROJECT_LOCAL_POLICY_JSON" ]]; then
+        PROJECT_ROOT="$PROJECT_ROOT_CANDIDATE"
+    elif PROJECT_POLICY_JSON="$(read_legacy_policy "$LEGACY_PROJECT_CONFIG")"; then
+        PROJECT_POLICY_SOURCE="$LEGACY_PROJECT_CONFIG"
+        PROJECT_ROOT="$PROJECT_ROOT_CANDIDATE"
+    else
+        status=$?
+        if [[ "$status" -gt 1 ]]; then
+            exit 1
+        fi
+        PROJECT_POLICY_JSON=""
+    fi
 fi
 
 # Build combined flags: global (minus overridden keys) + project
 config_flags=()
 declare -A no_skip=()
+declare -A project_skip=()
+declare -A global_skip=()
+declare -A policy_key_types=()
+declare -A policy_key_sources=()
 
-# Type-conflict check: same key in both configs must have matching type (array vs scalar)
-if [[ -f "$GLOBAL_CONFIG" ]] && [[ -r "$GLOBAL_CONFIG" ]] &&
-    [[ -f "$PROJECT_CONFIG" ]] && [[ -r "$PROJECT_CONFIG" ]]; then
-    while IFS=$'\t' read -r key gtype ptype; do
-        if { [[ "$gtype" == "array" ]] && [[ "$ptype" != "array" ]]; } ||
-            { [[ "$gtype" != "array" ]] && [[ "$ptype" == "array" ]]; }; then
-            echo "copilot-plus: error: type conflict for key '$key': '$gtype' in global config, '$ptype' in project config" >&2
-            exit 1
-        fi
-    done < <(jq -rn \
-        --slurpfile g "$GLOBAL_CONFIG" \
-        --slurpfile p "$PROJECT_CONFIG" \
-        '($g[0] | to_entries[] | select(.key | startswith("--")) | {key: .key, t: (.value | type)}) as $ge |
-     ($p[0] | to_entries[] | select(.key == $ge.key)) |
-     [$ge.key, $ge.t, (.value | type)] | @tsv')
-fi
-read_config_flags "$GLOBAL_CONFIG" config_flags project_keys
-read_config_flags "$PROJECT_CONFIG" config_flags no_skip
+check_policy_type_conflicts "$GLOBAL_POLICY_JSON" "$GLOBAL_POLICY_SOURCE" policy_key_types policy_key_sources
+check_policy_type_conflicts "$PROJECT_POLICY_JSON" "$PROJECT_POLICY_SOURCE" policy_key_types policy_key_sources
+check_policy_type_conflicts "$PROJECT_LOCAL_POLICY_JSON" "$PROJECT_LOCAL_POLICY_SOURCE" policy_key_types policy_key_sources
+
+collect_non_array_keys "$PROJECT_POLICY_JSON" global_skip
+collect_non_array_keys "$PROJECT_LOCAL_POLICY_JSON" global_skip
+collect_non_array_keys "$PROJECT_LOCAL_POLICY_JSON" project_skip
+
+read_policy_flags "$GLOBAL_POLICY_JSON" "$GLOBAL_POLICY_SOURCE" config_flags global_skip
+read_policy_flags "$PROJECT_POLICY_JSON" "$PROJECT_POLICY_SOURCE" config_flags project_skip
+read_policy_flags "$PROJECT_LOCAL_POLICY_JSON" "$PROJECT_LOCAL_POLICY_SOURCE" config_flags no_skip
 
 # Auto-inject project root as --add-dir if a .copilot/ was found via upward search (only if dir exists)
 if [[ -n "$PROJECT_ROOT" ]] && [[ -d "$PROJECT_ROOT" ]]; then

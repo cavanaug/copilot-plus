@@ -11,13 +11,14 @@ setup() {
     "$STUB_ARGS_FILE" "$BATS_TMPDIR/stub_env" > "$BATS_TMPDIR/bin/copilot"
   chmod +x "$BATS_TMPDIR/bin/copilot"
 
-  # Create .copilot config directory
+  # Create Copilot config directory
   mkdir -p "$BATS_TMPDIR/.copilot"
 }
 
 teardown() {
   rm -f "$BATS_TMPDIR/stub_args"
   rm -f "$BATS_TMPDIR/.copilot/config.json"
+  rm -f "$BATS_TMPDIR/.copilot/settings.json"
   rm -rf "$BATS_TMPDIR/project"
   rm -f "$BATS_TMPDIR/stub_env"
 }
@@ -33,19 +34,47 @@ run_wrapper_in_project() {
   run bash -c "cd \"$BATS_TMPDIR/project\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" \"\$@\"" -- "$@"
 }
 
-# Helper: write global config JSON
+# Helper: write global settings JSON/JSONC with wrapper policy
 write_config() {
+  printf '{"copilotPlus": %s}\n' "$1" > "$BATS_TMPDIR/.copilot/settings.json"
+}
+
+# Helper: write raw global settings JSON/JSONC
+write_raw_settings() {
+  printf '%s\n' "$1" > "$BATS_TMPDIR/.copilot/settings.json"
+}
+
+# Helper: write shared repo settings JSON/JSONC with wrapper policy
+write_project_config() {
+  mkdir -p "$BATS_TMPDIR/project/.github/copilot"
+  printf '{"copilotPlus": %s}\n' "$1" > "$BATS_TMPDIR/project/.github/copilot/settings.json"
+}
+
+# Helper: write raw shared repo settings JSON/JSONC
+write_raw_project_settings() {
+  mkdir -p "$BATS_TMPDIR/project/.github/copilot"
+  printf '%s\n' "$1" > "$BATS_TMPDIR/project/.github/copilot/settings.json"
+}
+
+# Helper: write local repo settings JSON/JSONC with wrapper policy
+write_local_project_config() {
+  mkdir -p "$BATS_TMPDIR/project/.github/copilot"
+  printf '{"copilotPlus": %s}\n' "$1" > "$BATS_TMPDIR/project/.github/copilot/settings.local.json"
+}
+
+# Helper: write legacy global wrapper config JSON
+write_legacy_global_config() {
   printf '%s\n' "$1" > "$BATS_TMPDIR/.copilot/config.json"
 }
 
-# Helper: write project config JSON
-write_project_config() {
+# Helper: write legacy project wrapper config JSON
+write_legacy_project_config() {
   mkdir -p "$BATS_TMPDIR/project/.copilot"
   printf '%s\n' "$1" > "$BATS_TMPDIR/project/.copilot/config.json"
 }
 
 # ============================================================
-# CONF-01: Wrapper reads ~/.copilot/config.json at invocation
+# CONF-01: Wrapper reads ~/.copilot/settings.json copilotPlus at invocation
 # ============================================================
 
 @test "CONF-01: valid config is read and flags are injected" {
@@ -54,6 +83,23 @@ write_project_config() {
   [ "$status" -eq 0 ]
   grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
   grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+@test "CONF-01b: legacy ~/.copilot/config.json still works as fallback" {
+  write_legacy_global_config '{"--yolo":true}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--yolo" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+@test "CONF-01c: ~/.copilot/settings.json copilotPlus wins over legacy config.json" {
+  write_config '{"--model":"gpt-4.1"}'
+  write_legacy_global_config '{"--model":"gpt-4"}'
+  run_wrapper myarg
+  [ "$status" -eq 0 ]
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================
@@ -70,11 +116,11 @@ write_project_config() {
 
 @test "CONF-02: unreadable config file → exit 0, stub called with only user args" {
   write_config '{"--yolo":true}'
-  chmod 000 "$BATS_TMPDIR/.copilot/config.json"
+  chmod 000 "$BATS_TMPDIR/.copilot/settings.json"
   run_wrapper myarg
   [ "$status" -eq 0 ]
   grep -qx "myarg" "$BATS_TMPDIR/stub_args"
-  chmod 644 "$BATS_TMPDIR/.copilot/config.json"
+  chmod 644 "$BATS_TMPDIR/.copilot/settings.json"
 }
 
 # ============================================================
@@ -82,7 +128,7 @@ write_project_config() {
 # ============================================================
 
 @test "CONF-03: invalid JSON → exit non-zero, error on stderr, stub not called" {
-  write_config 'not valid json {'
+  write_raw_settings '{"copilotPlus": [1,,2]}'
   run_wrapper myarg
   [ "$status" -ne 0 ]
   [[ "$output" == *"error"* ]]
@@ -318,11 +364,38 @@ write_project_config() {
 # ============================================================
 
 @test "EXT-01c: project config invalid JSON → exit non-zero, error on stderr, stub not called" {
-  write_project_config 'not valid json {'
+  write_raw_project_settings '{"copilotPlus": [1,,2]}'
   run_wrapper_in_project myarg
   [ "$status" -ne 0 ]
   [[ "$output" == *"error"* ]]
   [ ! -f "$BATS_TMPDIR/stub_args" ]
+}
+
+@test "EXT-01n: legacy project .copilot/config.json still works as fallback" {
+  write_legacy_project_config '{"--allow-tool":["bash"]}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx -- "--allow-tool" "$BATS_TMPDIR/stub_args"
+  grep -qx "bash" "$BATS_TMPDIR/stub_args"
+  grep -qx "myarg" "$BATS_TMPDIR/stub_args"
+}
+
+@test "EXT-01o: .github/copilot/settings.json copilotPlus wins over legacy project config.json" {
+  write_project_config '{"--model":"gpt-4.1"}'
+  write_legacy_project_config '{"--model":"gpt-4"}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
+}
+
+@test "EXT-01p: .github/copilot/settings.local.json copilotPlus overrides .github/copilot/settings.json copilotPlus" {
+  write_project_config '{"--model":"gpt-4"}'
+  write_local_project_config '{"--model":"gpt-4.1"}'
+  run_wrapper_in_project myarg
+  [ "$status" -eq 0 ]
+  grep -qx "gpt-4.1" "$BATS_TMPDIR/stub_args"
+  ! grep -qx "gpt-4" "$BATS_TMPDIR/stub_args"
 }
 
 # ============================================================
@@ -534,10 +607,10 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# EXT-02a: Running from subdirectory finds parent .copilot/config.json → flags injected
+# EXT-02a: Running from subdirectory finds parent .github/copilot/settings.json → flags injected
 # ============================================================
 
-@test "EXT-02a: run from subdirectory finds parent .copilot/config.json → flags injected" {
+@test "EXT-02a: run from subdirectory finds parent .github/copilot/settings.json → flags injected" {
   write_project_config '{"--allow-tool":["bash"]}'
   run_wrapper_in_subdir myarg
   [ "$status" -eq 0 ]
@@ -547,10 +620,10 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# EXT-02b: Parent containing .copilot/ auto-injected as --add-dir
+# EXT-02b: Parent containing repo settings auto-injected as --add-dir
 # ============================================================
 
-@test "EXT-02b: run from subdirectory → parent containing .copilot/ auto-injected as --add-dir" {
+@test "EXT-02b: run from subdirectory → parent containing repo settings auto-injected as --add-dir" {
   write_project_config '{"--allow-tool":["bash"]}'
   run_wrapper_in_subdir myarg
   [ "$status" -eq 0 ]
@@ -559,10 +632,10 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# EXT-02c: Run from project root (.copilot/ at same level) → project root auto-injected as --add-dir
+# EXT-02c: Run from project root (.github/copilot/settings.json present) → project root auto-injected as --add-dir
 # ============================================================
 
-@test "EXT-02c: run from project root (.copilot/ at same level) → project root auto-injected as --add-dir" {
+@test "EXT-02c: run from project root (.github/copilot/settings.json present) → project root auto-injected as --add-dir" {
   write_project_config '{"--allow-tool":["bash"]}'
   run_wrapper_in_project myarg
   [ "$status" -eq 0 ]
@@ -571,13 +644,13 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# EXT-02d: .git/ at project root, no .copilot/ → silent passthrough, no auto --add-dir
+# EXT-02d: .git/ at project root, no repo policy host files → silent passthrough, no auto --add-dir
 # ============================================================
 
-@test "EXT-02d: .git/ at project root, no .copilot/ → silent passthrough, no auto --add-dir" {
+@test "EXT-02d: .git/ at project root, no repo policy host files → silent passthrough, no auto --add-dir" {
   mkdir -p "$BATS_TMPDIR/project/.git"
   mkdir -p "$BATS_TMPDIR/project/sub"
-  # No .copilot/ in project
+  # No wrapper policy host files in project
   run bash -c "cd \"$BATS_TMPDIR/project/sub\" && env HOME=\"$BATS_TMPDIR\" PATH=\"$BATS_TMPDIR/bin:$PATH\" bash \"$BATS_TEST_DIRNAME/../copilot-plus\" myarg"
   [ "$status" -eq 0 ]
   ! grep -qx -- "--add-dir" "$BATS_TMPDIR/stub_args" 2>/dev/null || true
@@ -585,10 +658,10 @@ run_wrapper_in_subdir() {
 }
 
 # ============================================================
-# EXT-02e: .git/ and .copilot/ both at project root → config used, --add-dir injected
+# EXT-02e: .git/ and repo settings both at project root → config used, --add-dir injected
 # ============================================================
 
-@test "EXT-02e: .git/ and .copilot/ both at project root → config used, --add-dir injected" {
+@test "EXT-02e: .git/ and repo settings both at project root → config used, --add-dir injected" {
   mkdir -p "$BATS_TMPDIR/project/.git"
   write_project_config '{"--allow-tool":["bash"]}'
   mkdir -p "$BATS_TMPDIR/project/sub"
